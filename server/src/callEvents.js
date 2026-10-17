@@ -1,5 +1,5 @@
-// Applies Retell call lifecycle events to the calls table. Shared by the webhook
-// route (Retell pushes events) and retellSync (we poll Retell for them).
+// Applies Retell call lifecycle stages (started, ended, analyzed) to the calls table.
+// Driven by retellSync, which polls Retell for them.
 import { ensureCall, updateCall } from './callsRepo.js';
 import { classifyText, statusForUrgency, triageCall } from './triage.js';
 import { timelineEvent } from './timeline.js';

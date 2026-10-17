@@ -1,15 +1,13 @@
-// Creates (or updates) the Retell agent wired to this server: prompt (from
-// prompts/retell_system_prompt.md), emergency transfer, custom functions, webhook
-// and post-call analysis. Re-run whenever the URL, prompt or transfer number changes.
+// Creates (or updates) the Retell agent: prompt (from prompts/retell_system_prompt.md),
+// emergency transfer and post-call analysis. Re-run whenever the prompt or transfer
+// number changes. The server polls Retell for calls, so no public URL is needed.
 //
-// Usage: npm run setup:retell -- https://your-public-url.example.com
-//        npm run setup:retell                (no public URL: server polls Retell instead,
-//                                             no mid-call functions)
+// Usage: npm run setup:retell
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Retell from 'retell-sdk';
 import { config } from '../src/config.js';
-import { CATEGORIES, EMERGENCY, URGENCY_LEVELS } from '../src/triage.js';
+import { CATEGORIES, URGENCY_LEVELS } from '../src/triage.js';
 import { DISPATCH_OPTIONS } from '../src/report.js';
 
 const ROOT_ENV = fileURLToPath(new URL('../../.env', import.meta.url));
@@ -17,12 +15,6 @@ const MODEL = 'gpt-6-luna';
 const VOICE_ID = 'retell-Cimo';
 const AGENT_NAME = 'CivicLine Dispatch';
 
-const baseUrl = (process.argv[2] || '').replace(/\/+$/, '');
-if (baseUrl && !/^https:\/\//.test(baseUrl)) {
-  console.error('Usage: npm run setup:retell [-- https://your-public-url]  (URL must be https and reachable by Retell)');
-  process.exit(1);
-}
-const hasUrl = Boolean(baseUrl);
 if (!config.retellApiKey) {
   console.error('RETELL_API_KEY is not set in .env');
   process.exit(1);
@@ -30,7 +22,7 @@ if (!config.retellApiKey) {
 
 const retell = new Retell({ apiKey: config.retellApiKey });
 
-// The prompt lives in prompts/retell_system_prompt.md; <<PLACEHOLDERS>> are filled per mode.
+// The prompt lives in prompts/retell_system_prompt.md; <<PLACEHOLDERS>> depend on the transfer number.
 // (Not {{ }}: Retell treats that syntax as its own dynamic variables.)
 const PROMPT_FILE = fileURLToPath(new URL('../../prompts/retell_system_prompt.md', import.meta.url));
 
@@ -50,15 +42,6 @@ const fill = {
   EMERGENCY_ACTION: hasTransfer
     ? 'Immediately call `escalate_call`. Do not say anything else before calling it.'
     : 'Do not ask any questions. If the caller keeps talking, calmly repeat the line above.',
-  HAZARD_ACTION: hasUrl
-    ? '- Collect the location, then call `request_human` with the reason.'
-    : '- Collect the location and a short description.',
-  HAZARD_TELL: hasUrl
-    ? 'Tell the caller a city dispatcher has been alerted and will follow up urgently.'
-    : 'Tell the caller the report is being flagged as urgent for a city dispatcher to review. If anyone is in danger, they should dial 911.',
-  REPORT_ACTION: hasUrl
-    ? 'Call `log_service_request`, read back the reference number it returns, thank the caller, and end the call.'
-    : 'Confirm the details back to the caller, tell them the report has been recorded for the city, thank them, and end the call.',
 };
 
 const PROMPT = readFileSync(PROMPT_FILE, 'utf8').replace(/<<([A-Z_]+)>>/g, (m, key) => {
@@ -66,46 +49,9 @@ const PROMPT = readFileSync(PROMPT_FILE, 'utf8').replace(/<<([A-Z_]+)>>/g, (m, k
   return fill[key];
 });
 
-const str = (description) => ({ type: 'string', description });
-
 const endCall = { type: 'end_call', name: 'end_call', description: 'End the call once the report is complete or the caller says goodbye.' };
 
-const customTools = [
-  {
-    type: 'custom',
-    name: 'request_human',
-    url: `${baseUrl}/api/retell/functions/request_human`,
-    description: 'Alert a human city dispatcher about an urgent, non-life-threatening hazard.',
-    parameters: {
-      type: 'object',
-      properties: { reason: str('Why a human is needed, including the location') },
-      required: ['reason'],
-    },
-    speak_during_execution: false,
-    speak_after_execution: true,
-  },
-  {
-    type: 'custom',
-    name: 'log_service_request',
-    url: `${baseUrl}/api/retell/functions/log_service_request`,
-    description: 'Log a non-urgent city service request. Returns a reference number to read back to the caller.',
-    parameters: {
-      type: 'object',
-      properties: {
-        category: { type: 'string', enum: CATEGORIES.filter((c) => c !== EMERGENCY), description: 'Type of issue' },
-        location: str('Street address or cross streets'),
-        description: str('Short description of the issue'),
-        caller_name: str("Caller's name, if given"),
-      },
-      required: ['category', 'location', 'description'],
-    },
-    speak_during_execution: true,
-    execution_message_description: 'Let me log that for you.',
-    speak_after_execution: true,
-  },
-];
-
-// Retell's built-in transfer: works without a public URL because Retell places the call.
+// Retell's built-in transfer: Retell places the call itself.
 const escalateCall = {
   type: 'transfer_call',
   name: 'escalate_call',
@@ -118,7 +64,7 @@ const escalateCall = {
 const llmParams = {
   model: MODEL,
   general_prompt: PROMPT,
-  general_tools: [endCall, ...(hasTransfer ? [escalateCall] : []), ...(hasUrl ? customTools : [])],
+  general_tools: [endCall, ...(hasTransfer ? [escalateCall] : [])],
   start_speaker: 'agent',
   begin_message: "City services line. I'm an AI assistant. If this is a life-threatening emergency, tell me right away. What would you like to report?",
 };
@@ -127,8 +73,9 @@ const agentParams = {
   agent_name: AGENT_NAME,
   voice_id: VOICE_ID,
   language: 'en-US',
-  webhook_url: hasUrl ? `${baseUrl}/webhooks/retell` : null,
-  webhook_events: hasUrl ? ['call_started', 'call_ended', 'call_analyzed'] : null,
+  // No webhook: the server polls Retell. Null also clears a URL left over from an older setup.
+  webhook_url: null,
+  webhook_events: null,
   post_call_analysis_data: [
     { type: 'enum', name: 'category', description: 'The type of issue the caller reported.', choices: CATEGORIES },
     {
@@ -206,8 +153,6 @@ try {
   // Publish succeeds with an empty body, which this SDK version fails to parse as JSON.
   if (!(err instanceof SyntaxError)) throw err;
 }
-// With a webhook, Retell pushes events; without one, the server polls Retell for calls.
-setEnv('RETELL_SYNC', hasUrl ? 'false' : 'true');
 
 console.log(`\nPublished version ${agent.version}`);
 
@@ -227,11 +172,4 @@ for (const number of Array.isArray(numbers) ? numbers : numbers.items || []) {
 console.log(hasTransfer
   ? `  Emergency transfer (escalate_call): ${transferNumber}`
   : '  No DISPATCH_TRANSFER_NUMBER: emergencies get "hang up and dial 911" instead of a transfer.');
-if (hasUrl) {
-  console.log(`  Webhook:   ${agentParams.webhook_url}
-  Functions: ${baseUrl}/api/retell/functions/{request_human,log_service_request}`);
-} else {
-  console.log(`  No public URL: no webhook or mid-call functions. The server will poll Retell for calls
-  (RETELL_SYNC=true). Rerun with a URL later to enable live escalations.`);
-}
 console.log('\nRestart the server so it picks up the changes, then use "Test call" on the dashboard.');

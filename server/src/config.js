@@ -13,9 +13,6 @@ export const config = {
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   retellApiKey: process.env.RETELL_API_KEY,
   retellAgentId: process.env.RETELL_AGENT_ID,
-  verifyWebhooks: process.env.RETELL_VERIFY_WEBHOOKS !== 'false',
-  // Poll Retell for calls instead of (or as well as) receiving webhooks. Set by setup:retell.
-  retellSync: process.env.RETELL_SYNC === 'true',
 };
 
 export function assertConfig() {
@@ -26,6 +23,6 @@ export function assertConfig() {
     throw new Error(`Missing required environment variables: ${missing.join(', ')} (see .env.example)`);
   }
   if (!config.retellApiKey) {
-    console.warn('[config] RETELL_API_KEY not set: webhook verification and web calls are disabled.');
+    console.warn('[config] RETELL_API_KEY not set: call syncing and web calls are disabled.');
   }
 }

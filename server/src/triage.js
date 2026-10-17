@@ -114,7 +114,7 @@ export function statusForUrgency(urgency) {
 }
 
 /**
- * @param {object} call Retell call object (from a webhook payload)
+ * @param {object} call Retell call object (from retell.call.retrieve)
  * @returns {{category, urgency_level, status, summary, location, caller_name}}
  */
 export function triageCall(call = {}) {

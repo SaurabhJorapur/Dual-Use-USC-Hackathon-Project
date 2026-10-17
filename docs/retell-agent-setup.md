@@ -4,11 +4,11 @@ Everything here is configured by one re-runnable command:
 
 ```bash
 cd server
-npm run setup:retell                       # no public URL: server polls Retell for calls
-npm run setup:retell -- https://YOUR-API   # with a public URL: webhooks + mid-call functions
+npm run setup:retell
 ```
 
-Rerun it whenever the prompt, the public URL or `DISPATCH_TRANSFER_NUMBER` changes. Each run creates and
+No public URL or tunnel is involved: the agent has no webhook, and the server polls Retell for its calls every
+5 seconds. Rerun the script whenever the prompt or `DISPATCH_TRANSFER_NUMBER` changes. Each run creates and
 publishes a new **version** of the same "CivicLine Dispatch" agent (not a new agent). Phone numbers are bought
 separately in the Retell dashboard (Phone Numbers → Buy), with the inbound agent set to **CivicLine Dispatch**.
 
@@ -18,7 +18,7 @@ routes to CivicLine Dispatch to the new version, so phone calls and browser test
 ## Prompt
 
 Source of truth: [`prompts/retell_system_prompt.md`](../prompts/retell_system_prompt.md). The script fills the
-`<<PLACEHOLDERS>>` for the current mode. `{{ }}` is not used because Retell reserves it for its own variables.
+`<<PLACEHOLDERS>>` depending on whether a transfer number is set. `{{ }}` is not used because Retell reserves it for its own variables.
 
 The prompt starts with an **immediate escalation override**. On any life-safety statement ("I'm going to die",
 "he has a gun", "I can't breathe", "someone is breaking in", "there is a fire"…), the agent asks no questions
@@ -33,12 +33,13 @@ Use a phone **you control** as stand-in dispatch. **Never real 911.**
 
 ## Tools
 
-| Tool | Type | Needs public URL | Purpose |
-|---|---|---|---|
-| `end_call` | built-in | No | End the call |
-| `escalate_call` | built-in transfer | No | Emergency transfer to `DISPATCH_TRANSFER_NUMBER`. The dashboard marks the call Critical / Escalated to 911 when the transfer happens. |
-| `request_human` | custom → `/api/retell/functions/request_human` | Yes | Flag an urgent hazard for a human dispatcher |
-| `log_service_request` | custom → `/api/retell/functions/log_service_request` | Yes | Log a routine report and return a reference number |
+| Tool | Type | Purpose |
+|---|---|---|
+| `end_call` | built-in | End the call |
+| `escalate_call` | built-in transfer | Emergency transfer to `DISPATCH_TRANSFER_NUMBER` (only when it's set). The dashboard marks the call Critical / Escalated to 911 when the transfer happens. |
+
+Urgent hazards and routine reports are collected in conversation; post-call analysis then sets the category,
+urgency and dispatcher escalation on the dashboard.
 
 ## Categories
 

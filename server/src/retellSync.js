@@ -1,5 +1,6 @@
 // Polls Retell for this agent's recent calls and applies any lifecycle stages the
-// database hasn't seen yet. Lets the dashboard work without a public webhook URL.
+// database hasn't seen yet. This is how calls reach the app: the server only makes
+// outbound requests, so it needs no public URL.
 import { config } from './config.js';
 import { retell } from './retell.js';
 import { getByRetellId } from './callsRepo.js';
@@ -36,7 +37,7 @@ async function syncCall(item) {
 
 export function startRetellSync(intervalMs = 5000) {
   if (!retell || !config.retellAgentId) {
-    console.warn('[sync] RETELL_SYNC is on but RETELL_API_KEY / RETELL_AGENT_ID are missing; not polling.');
+    console.warn('[sync] RETELL_API_KEY / RETELL_AGENT_ID missing; not polling Retell for calls.');
     return;
   }
   let running = false;
@@ -65,5 +66,5 @@ export function startRetellSync(intervalMs = 5000) {
   };
   tick();
   setInterval(tick, intervalMs);
-  console.log(`[sync] Polling Retell for calls every ${intervalMs / 1000}s (no webhook needed).`);
+  console.log(`[sync] Polling Retell for calls every ${intervalMs / 1000}s.`);
 }

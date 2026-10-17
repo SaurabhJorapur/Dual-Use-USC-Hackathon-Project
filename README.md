@@ -5,7 +5,7 @@ traffic signals, noise) versus **emergencies** (robberies, accidents) and stream
 municipal dashboard.
 
 ```
-Caller ──► Retell AI agent ──webhooks/functions──► Express API ──► Supabase (Postgres)
+Caller ──► Retell AI agent ◄──polled every 5s── Express API ──► Supabase (Postgres)
                                                                       │ Realtime
                                               React dashboard ◄───────┘
 ```
@@ -13,7 +13,7 @@ Caller ──► Retell AI agent ──webhooks/functions──► Express API �
 ## Stack
 
 - **client/**: React (Vite) + Tailwind CSS + Lucide icons, Leaflet maps, Recharts, and Supabase Realtime for live updates
-- **server/**: Node.js + Express, which handles Retell webhooks, custom functions, and the dashboard REST API
+- **server/**: Node.js + Express, which polls Retell for calls and serves the dashboard REST API
 - **supabase/migrations/01_init.sql**: `calls` table, RLS (read-only for the anon key), realtime publication
 - **docs/retell-agent-setup.md**: agent prompt, functions, and post-call analysis config
 
@@ -48,20 +48,18 @@ npm run dev              # http://localhost:5173 (realtime needs VITE_SUPABASE_*
 ```
 
 ### 5. Retell
-Expose the API publicly, then let the setup script configure the agent:
 ```bash
-cloudflared tunnel --url http://localhost:3001     # or ngrok http 3001; copy the https URL
-cd server && npm run setup:retell -- https://YOUR-TUNNEL-URL
+cd server && npm run setup:retell
 ```
-The script creates (or updates) a Single Prompt agent with the prompt, functions, webhook and post-call
-analysis, publishes it, and saves `RETELL_AGENT_ID` to `.env`. Restart the server afterwards. **Rerun it
-whenever the tunnel URL changes.** The **Test call** button then starts a browser call to the agent.
-[docs/retell-agent-setup.md](docs/retell-agent-setup.md) documents what it configures.
+The script creates (or updates) a Single Prompt agent with the prompt, emergency transfer and post-call analysis,
+publishes it, and saves `RETELL_AGENT_ID` to `.env`. Restart the server afterwards. The **Test call** button then
+starts a browser call to the agent. [docs/retell-agent-setup.md](docs/retell-agent-setup.md) documents what it
+configures.
 
-**No public URL yet?** Run `npm run setup:retell` with no argument. The agent gets no webhook or mid-call
-functions, and the server polls Retell for calls every 5s instead (`RETELL_SYNC=true`). Calls still reach the
-dashboard with transcripts and triage, but escalations only happen after the call ends. Rerun with a URL later
-to enable live escalations.
+**How calls arrive:** the server polls Retell for this agent's calls every 5 seconds
+(`server/src/retellSync.js`) and processes each one as it starts, ends and is analyzed. It only makes outbound
+requests, so it works on any laptop behind any router. Emergency transfers still happen live during the call,
+because Retell places them itself.
 
 ## Dashboard
 
@@ -166,12 +164,11 @@ Calls are filed into five categories: **Emergency / Active Danger**, **Public Sa
 or a row in the "By category" panel to show only that category.
 
 1. **During the call:** on any life-safety statement the agent asks no questions and runs `escalate_call`, which
-   transfers the caller to `DISPATCH_TRANSFER_NUMBER` (a phone you control, never real 911). With a public URL it
-   can also run `request_human` and `log_service_request`. Escalations act as a floor that later automated triage
-   can't lower.
-2. **`call_ended`:** the transcript and recording are saved, provisional keyword triage runs, and a draft formal
+   transfers the caller to `DISPATCH_TRANSFER_NUMBER` (a phone you control, never real 911). Escalations act as a
+   floor that later automated triage can't lower.
+2. **Call ended** (seen by the next poll): the transcript and recording are saved, provisional keyword triage runs, and a draft formal
    report is written.
-3. **`call_analyzed`:** Retell's post-call analysis sets the final category, urgency and summary, and fills the
+3. **Call analyzed:** Retell's post-call analysis sets the final category, urgency and summary, and fills the
    **formal incident report** (`INC-<year>-<n>`, dispatch routing, executive summary, entities, key facts). A
    keyword safety net forces **Critical** if the transcript mentions weapons, injuries, fire, crashes, etc.
 
@@ -184,8 +181,6 @@ Dispatchers can override any call's status from the detail drawer.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/webhooks/retell` | Retell call events (signature verified) |
-| POST | `/api/retell/functions/:name` | Agent custom functions (signature verified) |
 | POST | `/api/retell/web-call` | Mint a browser test-call access token |
 | GET | `/api/calls` | List calls (`category`, `urgency`, `status`, `search`, `limit`) |
 | GET | `/api/calls/stats` | Aggregate counts |
