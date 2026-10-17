@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock, FileText, MapPin, Phone, User, X } from 'lucide-react';
 import { CategoryIcon, StatusBadge, UrgencyBadge } from './Badges';
+import IncidentReport from './IncidentReport';
 import { STATUS } from '../lib/constants';
 import { api } from '../lib/api';
 import { clockTime, formatPhone } from '../lib/format';
@@ -58,6 +59,7 @@ function Timeline({ events }) {
 export default function CallDrawer({ call, onClose, onUpdated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [tab, setTab] = useState('report');
 
   useEffect(() => {
     setError(null);
@@ -130,8 +132,25 @@ export default function CallDrawer({ call, onClose, onUpdated }) {
           </section>
 
           <section>
-            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Transcript</h3>
-            <Transcript text={call.transcript} />
+            <div className="mb-3 flex gap-1 border-b border-slate-200" role="tablist">
+              {[
+                ['report', 'Formal Incident Report'],
+                ['transcript', 'Raw Transcript'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => setTab(id)}
+                  className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                    tab === id ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {tab === 'report' ? <IncidentReport report={call.formal_report} call={call} /> : <Transcript text={call.transcript} />}
           </section>
         </div>
 

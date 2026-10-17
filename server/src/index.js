@@ -7,6 +7,9 @@ assertConfig();
 const { default: webhookRoutes } = await import('./routes/webhooks.js');
 const { default: retellRoutes } = await import('./routes/retell.js');
 const { default: callRoutes } = await import('./routes/calls.js');
+const { default: maintenanceRoutes } = await import('./routes/maintenance.js');
+const { default: predictRoutes } = await import('./routes/predict.js');
+const { default: clusterRoutes } = await import('./routes/clusters.js');
 const { startRetellSync } = await import('./retellSync.js');
 
 const app = express();
@@ -26,6 +29,9 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/webhooks', webhookRoutes);
 app.use('/api/retell', retellRoutes);
 app.use('/api/calls', callRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/predict-degradation', predictRoutes);
+app.use('/api/clusters', clusterRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error('[api]', err);

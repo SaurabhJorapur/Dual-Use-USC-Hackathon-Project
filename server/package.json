@@ -9,7 +9,11 @@
     "start": "node src/index.js",
     "seed": "node src/seed.js",
     "test": "node --test src/",
-    "setup:retell": "node scripts/setup-retell.js"
+    "setup:retell": "node scripts/setup-retell.js",
+    "backfill:reports": "node scripts/backfill-reports.js",
+    "setup:ml": "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+    "train:model": ".venv/bin/python scripts/train_model.py",
+    "backfill:clusters": "node scripts/backfill-clusters.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",

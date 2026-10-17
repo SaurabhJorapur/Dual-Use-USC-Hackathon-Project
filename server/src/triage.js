@@ -3,28 +3,49 @@
 // back to keyword matching over the transcript so the dashboard always gets a
 // valid row even if the LLM analysis is missing or malformed.
 
-export const CATEGORIES = ['Public Safety', 'Potholes', 'Traffic Signals', 'Noise & Other'];
+export const EMERGENCY = 'Emergency / Active Danger';
+export const HAZARDS = 'Public Safety & Hazards';
+export const CATEGORIES = [EMERGENCY, HAZARDS, 'Roads & Infrastructure', 'Utilities & Water', 'Code Enforcement & Sanitation'];
+export const DEFAULT_CATEGORY = 'Code Enforcement & Sanitation';
 export const URGENCY_LEVELS = ['Critical', 'Urgent', 'Standard'];
 export const STATUSES = ['Escalated to 911', 'Escalated to Human', 'AI Completed', 'In Progress'];
 
 const CRITICAL_TERMS = [
   'gun', 'shot', 'shooting', 'shooter', 'knife', 'stab', 'stabbed', 'stabbing', 'weapon', 'robbery', 'robbed', 'robbing', 'break-in',
   'breaking in', 'intruder', 'assault', 'assaulted', 'attack', 'attacked', 'attacking', 'kidnap', 'kidnapped', 'fire', 'smoke', 'explosion',
-  'not breathing', 'unconscious', 'unresponsive', 'bleeding', 'heart attack', 'overdose', 'crash', 'crashed', 'collision',
-  'accident', 'hit and run', 'injured', 'trapped', 'carjacking', 'domestic violence',
+  'not breathing', "can't breathe", 'cannot breathe', 'unconscious', 'unresponsive', 'bleeding', 'heart attack', 'overdose', 'crash', 'crashed', 'collision',
+  'accident', 'hit and run', 'injured', 'trapped', 'carjacking', 'domestic violence', 'going to die', 'gonna die', 'about to die',
 ];
 
+// Phrases containing a critical word that aren't emergencies by themselves,
+// rewritten so the non-critical part still counts toward its category.
+const BENIGN_PHRASES = { 'fire hydrant': 'hydrant' };
+
 const KEYWORDS = {
-  'Public Safety': [...CRITICAL_TERMS, 'police', 'suspicious', 'theft', 'stolen', 'fight', 'threat', 'vandal'],
-  Potholes: ['pothole', 'pot hole', 'sinkhole', 'crack in the road', 'road damage', 'pavement', 'asphalt', 'road surface'],
-  'Traffic Signals': ['traffic light', 'traffic signal', 'signal', 'stop light', 'stoplight', 'red light', 'crosswalk', 'walk sign', 'stop sign', 'flashing'],
-  'Noise & Other': ['noise', 'loud', 'music', 'party', 'barking', 'graffiti', 'trash', 'streetlight', 'street light', 'tree', 'abandoned'],
+  [EMERGENCY]: [...CRITICAL_TERMS, 'police', 'suspicious', 'theft', 'stolen', 'fight', 'threat'],
+  [HAZARDS]: [
+    'downed', 'power line', 'gas leak', 'smell gas', 'gas smell', 'hydrant', 'blocked intersection', 'blocking',
+    'flooding', 'flood', 'flooded', 'hazard', 'dangerous', 'sinkhole', 'debris',
+  ],
+  'Roads & Infrastructure': [
+    'pothole', 'pot hole', 'crack in the road', 'road damage', 'pavement', 'asphalt', 'road surface', 'traffic light',
+    'traffic signal', 'signal', 'stop light', 'stoplight', 'red light', 'crosswalk', 'walk sign', 'stop sign', 'street sign',
+    'sign', 'sidewalk', 'streetlight', 'street light', 'bridge',
+  ],
+  'Utilities & Water': [
+    'water main', 'water leak', 'burst pipe', 'sewer', 'sewage', 'backup', 'power outage', 'outage', 'no power',
+    'blackout', 'fallen tree', 'tree', 'water pressure', 'no water',
+  ],
+  'Code Enforcement & Sanitation': [
+    'illegal dumping', 'dumping', 'noise', 'loud', 'music', 'party', 'barking', 'abandoned', 'abandoned vehicle',
+    'trash', 'garbage', 'missed pickup', 'graffiti', 'litter', 'vandal', 'vandalism',
+  ],
 };
 
-// Hazards that make a non-safety issue urgent (needs a human dispatcher soon).
+// Hazards that make a non-emergency issue urgent (needs a human dispatcher soon).
 const URGENT_TERMS = [
   'dangerous', 'hazard', 'all directions', 'completely out', 'not working at all', 'dark',
-  'downed', 'down power line', 'power line', 'flooding', 'flood', 'blocking', 'swerving',
+  'downed', 'power line', 'gas leak', 'smell gas', 'flooding', 'flood', 'blocking', 'swerving',
   'huge', 'deep', 'damaged my car', 'flat tire', 'school zone', 'highway', 'freeway',
 ];
 
@@ -50,8 +71,9 @@ function pick(value, allowed) {
 }
 
 export function classifyText(text = '') {
-  const t = text.toLowerCase();
-  let category = 'Noise & Other';
+  let t = text.toLowerCase();
+  for (const [phrase, replacement] of Object.entries(BENIGN_PHRASES)) t = t.replaceAll(phrase, replacement);
+  let category = DEFAULT_CATEGORY;
   let best = 0;
   for (const cat of CATEGORIES) {
     const score = countMatches(t, KEYWORDS[cat]);
@@ -64,9 +86,23 @@ export function classifyText(text = '') {
   let urgency = 'Standard';
   if (countMatches(t, CRITICAL_TERMS) > 0) {
     urgency = 'Critical';
-    category = 'Public Safety';
-  } else if (category === 'Public Safety' || countMatches(t, URGENT_TERMS) > 0) {
+    category = EMERGENCY;
+  } else if (category === EMERGENCY || category === HAZARDS || countMatches(t, URGENT_TERMS) > 0) {
     urgency = 'Urgent';
+  }
+  return couple(category, urgency);
+}
+
+const URGENCY_RANK = ['Standard', 'Urgent', 'Critical'];
+
+/**
+ * Keeps category and urgency consistent: Critical always files under Emergency,
+ * Emergency is always Critical, and Hazards are at least Urgent.
+ */
+export function couple(category, urgency) {
+  if (urgency === 'Critical' || category === EMERGENCY) return { category: EMERGENCY, urgency_level: 'Critical' };
+  if (category === HAZARDS && URGENCY_RANK.indexOf(urgency) < URGENCY_RANK.indexOf('Urgent')) {
+    return { category, urgency_level: 'Urgent' };
   }
   return { category, urgency_level: urgency };
 }
@@ -87,10 +123,10 @@ export function triageCall(call = {}) {
   const transcript = call.transcript || '';
   const fallback = classifyText(`${transcript} ${analysis.call_summary || ''}`);
 
-  const category = pick(custom.category, CATEGORIES) || fallback.category;
   let urgency = pick(custom.urgency_level, URGENCY_LEVELS) || fallback.urgency_level;
   // Never let the LLM downgrade something the keyword safety net flags as Critical.
   if (fallback.urgency_level === 'Critical') urgency = 'Critical';
+  const { category, urgency_level } = couple(pick(custom.category, CATEGORIES) || fallback.category, urgency);
 
   const summary =
     (typeof custom.summary === 'string' && custom.summary.trim()) ||
@@ -98,9 +134,9 @@ export function triageCall(call = {}) {
     (transcript ? transcript.slice(0, 280) : 'No summary available.');
 
   return {
-    category: urgency === 'Critical' ? 'Public Safety' : category,
-    urgency_level: urgency,
-    status: statusForUrgency(urgency),
+    category,
+    urgency_level,
+    status: statusForUrgency(urgency_level),
     summary,
     location: typeof custom.location === 'string' && custom.location.trim() ? custom.location.trim().slice(0, 255) : null,
     caller_name:

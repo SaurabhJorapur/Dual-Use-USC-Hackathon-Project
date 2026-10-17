@@ -49,7 +49,8 @@ export function startRetellSync(intervalMs = 5000) {
         sort_order: 'descending',
         limit: 25,
       });
-      for (const item of items) {
+      // Oldest first, so rows (and their incident numbers) are created in call order.
+      for (const item of [...items].reverse()) {
         try {
           await syncCall(item);
         } catch (err) {

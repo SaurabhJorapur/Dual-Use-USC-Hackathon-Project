@@ -3,9 +3,11 @@
 import { ensureCall, updateCall } from './callsRepo.js';
 import { classifyText, statusForUrgency, triageCall } from './triage.js';
 import { timelineEvent } from './timeline.js';
+import { buildFormalReport } from './report.js';
 
 export const ENDED_EVENT = 'Call ended';
 export const ANALYZED_EVENT = 'AI triage complete';
+const TRANSFER_REASONS = ['call_transfer', 'transfer_bridged'];
 
 export async function handleCallStarted(call) {
   await ensureCall(call);
@@ -15,10 +17,11 @@ export async function handleCallEnded(call) {
   await ensureCall(call);
   // Provisional triage from the transcript; refined once the analysis arrives.
   const { category, urgency_level } = classifyText(call.transcript || '');
-  const transferred = call.disconnection_reason === 'call_transfer';
+  // The only transfer the agent has is escalate_call, the emergency dispatch transfer.
+  const transferred = TRANSFER_REASONS.includes(call.disconnection_reason);
   const events = [timelineEvent(ENDED_EVENT, call.disconnection_reason ? `Reason: ${call.disconnection_reason.replace(/_/g, ' ')}` : undefined)];
-  if (transferred) events.unshift(timelineEvent('Transferred to human dispatcher', undefined, 'Escalated to Human'));
-  await updateCall(
+  if (transferred) events.unshift(timelineEvent('Transferred to emergency dispatch', 'Agent ran escalate_call', 'Escalated to 911'));
+  const row = await updateCall(
     call.call_id,
     {
       category,
@@ -29,6 +32,8 @@ export async function handleCallEnded(call) {
     },
     events,
   );
+  // Provisional report; replaced by the AI version once the analysis arrives.
+  await updateCall(call.call_id, { formal_report: buildFormalReport({ row }) });
 }
 
 export async function handleCallAnalyzed(call) {
@@ -37,5 +42,6 @@ export async function handleCallAnalyzed(call) {
   const patch = { ...triage };
   if (call.transcript) patch.transcript = call.transcript;
   if (call.recording_url) patch.audio_url = call.recording_url;
-  await updateCall(call.call_id, patch, [timelineEvent(ANALYZED_EVENT, `${triage.category} · ${triage.urgency_level}`)]);
+  const row = await updateCall(call.call_id, patch, [timelineEvent(ANALYZED_EVENT, `${triage.category} · ${triage.urgency_level}`)]);
+  await updateCall(call.call_id, { formal_report: buildFormalReport({ row, call }) });
 }

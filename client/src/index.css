@@ -7,3 +7,74 @@
     @apply text-slate-900 antialiased;
   }
 }
+
+/* Map markers (Leaflet divIcons) */
+.map-pin {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--pin);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.15), 0 1px 4px rgb(15 23 42 / 0.35);
+}
+.map-pin--critical::after,
+.map-hotspot::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+  border: 2px solid var(--pin, #f97316);
+  animation: map-pulse 1.6s ease-out infinite;
+}
+.map-hotspot {
+  position: relative;
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: #fff;
+  background: radial-gradient(circle at 50% 35%, #fb923c, #ea580c);
+  border: 2px solid #fff;
+  box-shadow: 0 0 14px 4px rgb(249 115 22 / 0.45);
+}
+@keyframes map-pulse {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.leaflet-container {
+  font-family: inherit;
+  background: #f1f5f9;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.2);
+}
+.leaflet-popup-content {
+  margin: 12px 14px;
+}
+/* Leaflet adds large paragraph margins inside popups; the call card sets its own spacing. */
+.leaflet-popup-content p {
+  margin: 0;
+}
+
+/* Print / PDF: show only the formal incident report. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #incident-report,
+  #incident-report * {
+    visibility: visible;
+  }
+  #incident-report {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: none;
+    box-shadow: none;
+  }
+}

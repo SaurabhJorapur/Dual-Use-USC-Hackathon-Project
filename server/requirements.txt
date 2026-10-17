@@ -1,0 +1,9 @@
+# Predictive degradation model (scripts/train_model.py, scripts/predict_worker.py).
+# Install with `npm run setup:ml`. XGBoost on macOS also needs `brew install libomp`;
+# without it training falls back to scikit-learn's HistGradientBoostingClassifier.
+# Pinned: the saved model is a pickle, so inference must use the versions it was trained with.
+pandas==3.0.6
+numpy==2.5.4
+scikit-learn==1.9.1
+joblib==1.6.0
+xgboost==3.4.1

@@ -1,5 +1,6 @@
-// Creates (or updates) the Retell agent wired to this server: prompt, custom
-// functions, webhook and post-call analysis. Re-run whenever the public URL changes.
+// Creates (or updates) the Retell agent wired to this server: prompt (from
+// prompts/retell_system_prompt.md), emergency transfer, custom functions, webhook
+// and post-call analysis. Re-run whenever the URL, prompt or transfer number changes.
 //
 // Usage: npm run setup:retell -- https://your-public-url.example.com
 //        npm run setup:retell                (no public URL: server polls Retell instead,
@@ -8,7 +9,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Retell from 'retell-sdk';
 import { config } from '../src/config.js';
-import { CATEGORIES, URGENCY_LEVELS } from '../src/triage.js';
+import { CATEGORIES, EMERGENCY, URGENCY_LEVELS } from '../src/triage.js';
+import { DISPATCH_OPTIONS } from '../src/report.js';
 
 const ROOT_ENV = fileURLToPath(new URL('../../.env', import.meta.url));
 const MODEL = 'gpt-6-luna';
@@ -28,77 +30,47 @@ if (!config.retellApiKey) {
 
 const retell = new Retell({ apiKey: config.retellApiKey });
 
-// Without a public URL the agent has no custom functions, so the prompt asks it to
-// collect details instead; triage then comes from post-call analysis.
-const act = hasUrl
-  ? {
-      emergency: '- Call `escalate_emergency` IMMEDIATELY with what you know. Do not wait for full details.',
-      emergencySay: 'Say: "I am flagging this for emergency dispatch right now. If anyone is in immediate danger, please hang up and dial 911."',
-      emergencyLocation: 'Call `escalate_emergency` again if you learn the location afterwards.',
-      hazard: '- Collect the location, then call `request_human` with the reason.',
-      hazardTell: 'Tell the caller a city dispatcher has been alerted and will follow up urgently.',
-      report: '- Call `log_service_request` once you have the information.\n   - Read back the reference number it returns, thank the caller, and end the call.',
-      failure: '- If a tool fails, tell the caller:',
-    }
-  : {
-      emergency: '- Treat it as top priority. Do not collect non-essential details.',
-      // Nothing alerts anyone mid-call in this mode, so never imply help is on the way.
-      emergencySay: 'Say: "Please hang up and dial 911 now if anyone is in immediate danger. I am also recording this for city dispatch."',
-      emergencyLocation: '',
-      hazard: '- Collect the location and a short description.',
-      hazardTell: 'Tell the caller the report is being flagged as urgent for a city dispatcher to review. If anyone is in danger, they should dial 911.',
-      report: '- Confirm the details back to the caller, tell them the report has been recorded for the city, thank them, and end the call.',
-      failure: '- If you cannot help, tell the caller:',
-    };
+// The prompt lives in prompts/retell_system_prompt.md; <<PLACEHOLDERS>> are filled per mode.
+// (Not {{ }}: Retell treats that syntax as its own dynamic variables.)
+const PROMPT_FILE = fileURLToPath(new URL('../../prompts/retell_system_prompt.md', import.meta.url));
 
-const PROMPT = `# Role
-You are a calm, clear, and empathetic City Assistant for the City Administration. Your job is to answer non-emergency municipal reports while immediately spotting life-threatening emergencies. You are an AI assistant; say so if asked.
+// Emergency transfer target: a phone the operator controls. Never real 911.
+const transferNumber = (process.env.DISPATCH_TRANSFER_NUMBER || '').trim();
+if (transferNumber && !/^\+[1-9]\d{9,14}$/.test(transferNumber)) {
+  console.error('DISPATCH_TRANSFER_NUMBER must be a full E.164 number like +12135551234 (short codes such as 911 are refused).');
+  process.exit(1);
+}
+const hasTransfer = Boolean(transferNumber);
 
-# Triage Rules
-Decide within your first one or two turns which category the call is. If unsure, treat it as an emergency.
+const fill = {
+  // Only claim to connect the caller when a real transfer exists.
+  EMERGENCY_SCRIPT: hasTransfer
+    ? 'I am connecting you to an emergency dispatch team right now. Please stay on the line.'
+    : 'This is an emergency. Please hang up and dial 911 now.',
+  EMERGENCY_ACTION: hasTransfer
+    ? 'Immediately call `escalate_call`. Do not say anything else before calling it.'
+    : 'Do not ask any questions. If the caller keeps talking, calmly repeat the line above.',
+  HAZARD_ACTION: hasUrl
+    ? '- Collect the location, then call `request_human` with the reason.'
+    : '- Collect the location and a short description.',
+  HAZARD_TELL: hasUrl
+    ? 'Tell the caller a city dispatcher has been alerted and will follow up urgently.'
+    : 'Tell the caller the report is being flagged as urgent for a city dispatcher to review. If anyone is in danger, they should dial 911.',
+  REPORT_ACTION: hasUrl
+    ? 'Call `log_service_request`, read back the reference number it returns, thank the caller, and end the call.'
+    : 'Confirm the details back to the caller, tell them the report has been recorded for the city, thank them, and end the call.',
+};
 
-1. Emergency (active crime, robbery, weapons, violence, crash with injuries, fire, someone not breathing or trapped):
-   ${act.emergency}
-   - ${act.emergencySay}
-   - Ask for the exact location if you don't have it, and whether the caller is safe.${act.emergencyLocation ? ` ${act.emergencyLocation}` : ''}
-   - Keep sentences short and calm.
-
-2. Urgent hazard (downed power lines, gas smell, traffic signals out at a busy intersection, large pothole on a highway, flooding):
-   ${act.hazard}
-   - ${act.hazardTell}
-
-3. Non-urgent report (pothole, broken traffic light, noise complaint, graffiti, streetlight):
-   - Collect the specific street location (address or cross streets), a short description, and optionally the caller's name.
-   ${act.report}
-
-# Strict Safety Boundaries
-- Do NOT improvise medical, legal, or tactical advice.
-- If a caller is in danger, repeat: "Are you in a safe place right now?"
-${act.failure} "We cannot reach a human operator right now. If this is a life-threatening emergency, please hang up and dial 911 immediately."`;
+const PROMPT = readFileSync(PROMPT_FILE, 'utf8').replace(/<<([A-Z_]+)>>/g, (m, key) => {
+  if (!(key in fill)) throw new Error(`Unknown placeholder ${m} in ${PROMPT_FILE}`);
+  return fill[key];
+});
 
 const str = (description) => ({ type: 'string', description });
 
 const endCall = { type: 'end_call', name: 'end_call', description: 'End the call once the report is complete or the caller says goodbye.' };
 
 const customTools = [
-  {
-    type: 'custom',
-    name: 'escalate_emergency',
-    url: `${baseUrl}/api/retell/functions/escalate_emergency`,
-    description: 'Flag a life-threatening emergency for 911 dispatch. Call immediately when an emergency is detected.',
-    parameters: {
-      type: 'object',
-      properties: {
-        emergency_type: str('Short label, e.g. "armed robbery", "car crash with injuries", "fire"'),
-        location: str('Address, cross streets or landmark, if known'),
-        details: str('One-sentence description of what is happening'),
-        caller_name: str("Caller's name, if given"),
-      },
-      required: ['emergency_type'],
-    },
-    speak_during_execution: false,
-    speak_after_execution: true,
-  },
   {
     type: 'custom',
     name: 'request_human',
@@ -120,7 +92,7 @@ const customTools = [
     parameters: {
       type: 'object',
       properties: {
-        category: { type: 'string', enum: CATEGORIES.filter((c) => c !== 'Public Safety'), description: 'Type of issue' },
+        category: { type: 'string', enum: CATEGORIES.filter((c) => c !== EMERGENCY), description: 'Type of issue' },
         location: str('Street address or cross streets'),
         description: str('Short description of the issue'),
         caller_name: str("Caller's name, if given"),
@@ -133,10 +105,20 @@ const customTools = [
   },
 ];
 
+// Retell's built-in transfer: works without a public URL because Retell places the call.
+const escalateCall = {
+  type: 'transfer_call',
+  name: 'escalate_call',
+  description: 'Immediately transfer the caller to emergency dispatch. Use the moment any life-safety danger is mentioned.',
+  transfer_destination: { type: 'predefined', number: transferNumber },
+  transfer_option: { type: 'cold_transfer', show_transferee_as_caller: true },
+  speak_during_execution: false,
+};
+
 const llmParams = {
   model: MODEL,
   general_prompt: PROMPT,
-  general_tools: hasUrl ? [endCall, ...customTools] : [endCall],
+  general_tools: [endCall, ...(hasTransfer ? [escalateCall] : []), ...(hasUrl ? customTools : [])],
   start_speaker: 'agent',
   begin_message: "City services line. I'm an AI assistant. If this is a life-threatening emergency, tell me right away. What would you like to report?",
 };
@@ -158,6 +140,25 @@ const agentParams = {
     { type: 'string', name: 'summary', description: 'One or two sentence summary for a city dispatcher.' },
     { type: 'string', name: 'location', description: 'Location of the incident as stated by the caller. Empty if not given.' },
     { type: 'string', name: 'caller_name', description: "The caller's name, if given. Empty if not given." },
+    // Formal incident report fields (assembled into calls.formal_report by server/src/report.js)
+    {
+      type: 'string',
+      name: 'executive_summary',
+      description: 'A formal 2-3 sentence summary in official municipal incident report tone (third person, past tense, no speculation).',
+    },
+    {
+      type: 'enum',
+      name: 'dispatch_recommendation',
+      description: 'The agency that should handle this incident.',
+      choices: DISPATCH_OPTIONS,
+    },
+    { type: 'string', name: 'incident_type', description: 'Specific incident type, e.g. "Armed robbery in progress", "Pothole", "Water main break".' },
+    { type: 'string', name: 'involved_parties', description: 'People or vehicles involved as described by the caller (e.g. "Caller; one armed male suspect"). "Caller only" if none.' },
+    {
+      type: 'string',
+      name: 'key_facts',
+      description: 'Verified facts stated in the call, one per line, no bullets. Only facts the caller actually said.',
+    },
   ],
 };
 
@@ -209,9 +210,26 @@ try {
 setEnv('RETELL_SYNC', hasUrl ? 'false' : 'true');
 
 console.log(`\nPublished version ${agent.version}`);
+
+// Phone numbers are pinned to an agent version; move ours to the one just published.
+const numbers = await retell.phoneNumber.list();
+for (const number of Array.isArray(numbers) ? numbers : numbers.items || []) {
+  const patch = {};
+  for (const key of ['inbound_agents', 'outbound_agents']) {
+    const routes = number[key] || [];
+    if (!routes.some((r) => r.agent_id === agent.agent_id)) continue;
+    patch[key] = routes.map((r) => (r.agent_id === agent.agent_id ? { ...r, agent_version: agent.version } : r));
+  }
+  if (!Object.keys(patch).length) continue;
+  await retell.phoneNumber.update(number.phone_number, patch);
+  console.log(`  Phone ${number.phone_number} → version ${agent.version}`);
+}
+console.log(hasTransfer
+  ? `  Emergency transfer (escalate_call): ${transferNumber}`
+  : '  No DISPATCH_TRANSFER_NUMBER: emergencies get "hang up and dial 911" instead of a transfer.');
 if (hasUrl) {
   console.log(`  Webhook:   ${agentParams.webhook_url}
-  Functions: ${baseUrl}/api/retell/functions/{escalate_emergency,request_human,log_service_request}`);
+  Functions: ${baseUrl}/api/retell/functions/{request_human,log_service_request}`);
 } else {
   console.log(`  No public URL: no webhook or mid-call functions. The server will poll Retell for calls
   (RETELL_SYNC=true). Rerun with a URL later to enable live escalations.`);

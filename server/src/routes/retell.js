@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { config } from '../config.js';
 import { retell, verifyRetellSignature } from '../retell.js';
 import { ensureCall, updateCall } from '../callsRepo.js';
-import { CATEGORIES } from '../triage.js';
+import { CATEGORIES, DEFAULT_CATEGORY, EMERGENCY } from '../triage.js';
 import { timelineEvent } from '../timeline.js';
 
 const router = Router();
@@ -42,7 +42,7 @@ router.post('/functions/:name', verifyRetellSignature, async (req, res) => {
         await updateCall(
           call.call_id,
           {
-            category: 'Public Safety',
+            category: EMERGENCY,
             urgency_level: 'Critical',
             status: 'Escalated to 911',
             location: args.location || null,
@@ -69,7 +69,7 @@ router.post('/functions/:name', verifyRetellSignature, async (req, res) => {
       }
 
       case 'log_service_request': {
-        const category = CATEGORIES.includes(args.category) ? args.category : 'Noise & Other';
+        const category = CATEGORIES.includes(args.category) && args.category !== EMERGENCY ? args.category : DEFAULT_CATEGORY;
         const updated = await updateCall(
           call.call_id,
           {

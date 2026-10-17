@@ -12,15 +12,15 @@ export default function Header({ connection }) {
   const conn = CONNECTION[connection] || CONNECTION.connecting;
   const ConnIcon = conn.icon;
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+    <header className="z-20 shrink-0 border-b border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white">
             <Landmark className="h-5 w-5" aria-hidden />
           </span>
           <div>
             <h1 className="text-lg font-semibold leading-tight">CivicLine Dispatch</h1>
-            <p className="text-xs text-slate-500">AI call triage · City services &amp; emergencies</p>
+            <p className="text-xs text-slate-500">Municipal command center · AI call triage</p>
           </div>
         </div>
         <div className="flex items-center gap-3">

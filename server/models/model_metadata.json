@@ -1,0 +1,64 @@
+{
+  "model_type": "HistGradientBoostingClassifier",
+  "trained_at": "2026-10-17T17:45:51+00:00",
+  "data_as_of": "2025-03-31",
+  "source_files": [
+    "MyLA311-Service-Request-Data-2020.csv",
+    "MyLA311-Service-Request-Data-2021.csv",
+    "MyLA311-Service-Request-Data-2022.csv",
+    "MyLA311-Service-Request-Data-2023.csv",
+    "MyLA311-Service-Request-Data-2024-Oct 17.csv",
+    "MyLA311-Service-Request-Data-2025 Oct 17.csv"
+  ],
+  "request_types": [
+    "Single Streetlight Issue",
+    "Multiple Streetlight Issue"
+  ],
+  "patch_types": {
+    "0": "Single Streetlight Issue",
+    "1": "Multiple Streetlight Issue"
+  },
+  "target": "failed_again_90d: a new streetlight request in the same ~100 m cell within 90 days",
+  "cell": "lat/lng rounded to 3 decimals (~111 m x 92 m)",
+  "features": [
+    "days_since_last_patch",
+    "past_311_density",
+    "recent_311_density_365d",
+    "avg_resolution_days",
+    "patch_type_code"
+  ],
+  "feature_reference": {
+    "days_since_last_patch": 416.22,
+    "past_311_density": 1.0,
+    "recent_311_density_365d": 0.0,
+    "avg_resolution_days": 66.0,
+    "patch_type_code": 0.0
+  },
+  "global_avg_resolution_days": 62.69,
+  "risk_thresholds": {
+    "HIGH": 30.8,
+    "MEDIUM": 15.3
+  },
+  "recommended_actions": {
+    "HIGH": "Schedule Proactive Inspection within 14 Days",
+    "MEDIUM": "Add to Next Routine Inspection Cycle (within 45 Days)",
+    "LOW": "No Action Needed; Continue Monitoring"
+  },
+  "metrics": {
+    "auc_roc": 0.6978,
+    "average_precision": 0.303,
+    "base_rate": 0.1441,
+    "high": {
+      "threshold": 30.8,
+      "precision": 0.372,
+      "recall": 0.259
+    },
+    "medium_or_high": {
+      "threshold": 15.3,
+      "precision": 0.276,
+      "recall": 0.575
+    },
+    "train_rows": 155070,
+    "test_rows": 107265
+  }
+}

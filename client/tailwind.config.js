@@ -15,10 +15,15 @@ export default {
           '0%': { transform: 'translateX(100%)' },
           '100%': { transform: 'translateX(0)' },
         },
+        marquee: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
       },
       animation: {
         flash: 'flash 2.5s ease-out',
         'slide-in': 'slide-in 0.2s ease-out',
+        marquee: 'marquee 60s linear infinite',
       },
     },
   },

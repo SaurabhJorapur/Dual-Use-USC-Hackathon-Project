@@ -1,4 +1,4 @@
-import { CATEGORIES, STATUS, URGENCY } from '../lib/constants';
+import { CATEGORIES, DEFAULT_CATEGORY, STATUS, URGENCY } from '../lib/constants';
 
 export function UrgencyBadge({ level }) {
   const meta = URGENCY[level] || URGENCY.Standard;
@@ -22,7 +22,7 @@ export function StatusBadge({ status }) {
 }
 
 export function CategoryIcon({ category, size = 'h-9 w-9' }) {
-  const meta = CATEGORIES[category] || CATEGORIES['Noise & Other'];
+  const meta = CATEGORIES[category] || CATEGORIES[DEFAULT_CATEGORY];
   const Icon = meta.icon;
   return (
     <span className={`inline-flex shrink-0 items-center justify-center rounded-lg ${size} ${meta.color}`} title={category}>

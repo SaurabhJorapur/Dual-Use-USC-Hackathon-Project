@@ -3,3 +3,11 @@ node_modules
 .env.local
 dist
 .DS_Store
+
+# Raw datasets (multi-GB MyLA311 CSVs): local only, never commit.
+# The small model output the dashboard reads is the one exception.
+server/data/*
+!server/data/aggregated_risk_map.json
+
+# Python virtualenv for the degradation model (npm run setup:ml)
+.venv/

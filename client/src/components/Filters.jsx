@@ -23,10 +23,36 @@ function Select({ label, value, onChange, options }) {
 
 export const EMPTY_FILTERS = { search: '', category: '', urgency: '', status: '' };
 
-export default function Filters({ filters, onChange }) {
+function CategoryPills({ value, onChange, counts }) {
+  const pill = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition-colors';
+  const idle = 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50';
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by category">
+      <button onClick={() => onChange('')} aria-pressed={!value} className={`${pill} ${!value ? 'bg-slate-900 text-white ring-slate-900' : idle}`}>
+        All <span className="tabular-nums opacity-70">{counts.all}</span>
+      </button>
+      {Object.entries(CATEGORIES).map(([cat, meta]) => {
+        const Icon = meta.icon;
+        const active = value === cat;
+        return (
+          <button key={cat} onClick={() => onChange(active ? '' : cat)} aria-pressed={active} className={`${pill} ${active ? meta.pill : idle}`}>
+            <Icon className="h-3.5 w-3.5" aria-hidden />
+            {cat}
+            <span className="tabular-nums opacity-70">{counts[cat] || 0}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function Filters({ filters, onChange, calls = [] }) {
   const set = (key) => (value) => onChange({ ...filters, [key]: value });
   const active = Object.values(filters).some(Boolean);
+  const counts = calls.reduce((acc, c) => ({ ...acc, [c.category]: (acc[c.category] || 0) + 1 }), { all: calls.length });
   return (
+    <div className="space-y-3">
+    <CategoryPills value={filters.category} onChange={set('category')} counts={counts} />
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <label className="relative flex-1 sm:min-w-[16rem]">
         <span className="sr-only">Search calls</span>
@@ -40,7 +66,6 @@ export default function Filters({ filters, onChange }) {
         />
       </label>
       <div className="flex flex-wrap gap-2">
-        <Select label="Categories" value={filters.category} onChange={set('category')} options={Object.keys(CATEGORIES)} />
         <Select label="Urgency" value={filters.urgency} onChange={set('urgency')} options={Object.keys(URGENCY)} />
         <Select label="Statuses" value={filters.status} onChange={set('status')} options={Object.keys(STATUS)} />
         {active && (
@@ -52,6 +77,7 @@ export default function Filters({ filters, onChange }) {
           </button>
         )}
       </div>
+    </div>
     </div>
   );
 }

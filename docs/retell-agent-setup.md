@@ -1,76 +1,70 @@
 # Retell AI Agent Setup
 
-**Automated:** `cd server && npm run setup:retell -- https://YOUR-API` configures everything below except
-transfers (§4) and phone numbers. The script's prompt (in `server/scripts/setup-retell.js`) is the source of
-truth; the prompt here is a reference. The rest of this page documents the manual equivalent.
+Everything here is configured by one re-runnable command:
 
-Configure these in the [Retell dashboard](https://dashboard.retellai.com). Replace `https://YOUR-API` with your
-public backend URL. For local dev, expose port 3001 with a tunnel (e.g. `ngrok http 3001`).
-
-## 1. Webhook
-
-**Agent → Webhook URL:** `https://YOUR-API/webhooks/retell`
-
-Events used: `call_started` (creates the live "In Progress" row), `call_ended` (transcript, recording,
-provisional triage), and `call_analyzed` (final triage from post-call analysis). Requests are verified with
-the `x-retell-signature` header using your `RETELL_API_KEY`.
-
-## 2. Agent prompt (Single/Multi-Prompt LLM)
-
-```text
-You are the AI dispatcher for the City of Los Angeles civic services line. Callers report two kinds of things:
-(1) non-emergency city service issues: potholes, broken traffic signals, noise, graffiti, streetlights;
-(2) emergencies: crimes in progress, violence, weapons, fires, vehicle accidents with injuries, medical emergencies.
-
-FIRST, within your first one or two turns, decide whether this is an emergency.
-
-IF IT IS AN EMERGENCY (anyone in danger, a crime in progress, injuries, fire, weapons):
-- Immediately call `escalate_emergency` with what you know. Don't wait for full details.
-- Ask for the exact location if you don't have it, and whether the caller is safe.
-- Tell the caller help is being dispatched, then call `transfer_to_911`.
-- Keep sentences short and calm. Never put an emergency caller on hold to collect non-essential details.
-
-IF IT IS A SERVICE REQUEST:
-- Collect: the issue, the precise location (cross streets or address), and the caller's first name (optional).
-- If the issue is an immediate hazard (signals out at a busy intersection, a large pothole on a highway,
-  downed power lines, flooding), call `request_human` and transfer to the human dispatcher.
-- Otherwise call `log_service_request`, read back the reference number, and tell the caller the city
-  will follow up. Then end the call politely.
-
-Never give legal or medical advice. If unsure whether something is an emergency, treat it as one.
+```bash
+cd server
+npm run setup:retell                       # no public URL: server polls Retell for calls
+npm run setup:retell -- https://YOUR-API   # with a public URL: webhooks + mid-call functions
 ```
 
-## 3. Custom functions (Agent → Functions → Custom Function)
+Rerun it whenever the prompt, the public URL or `DISPATCH_TRANSFER_NUMBER` changes. Each run creates and
+publishes a new **version** of the same "CivicLine Dispatch" agent (not a new agent). Phone numbers are bought
+separately in the Retell dashboard (Phone Numbers → Buy), with the inbound agent set to **CivicLine Dispatch**.
 
-| Name | URL | Parameters (JSON schema properties) |
+Retell pins each phone number to a specific agent version. After publishing, the script moves every number that
+routes to CivicLine Dispatch to the new version, so phone calls and browser test calls run the same config.
+
+## Prompt
+
+Source of truth: [`prompts/retell_system_prompt.md`](../prompts/retell_system_prompt.md). The script fills the
+`<<PLACEHOLDERS>>` for the current mode. `{{ }}` is not used because Retell reserves it for its own variables.
+
+The prompt starts with an **immediate escalation override**. On any life-safety statement ("I'm going to die",
+"he has a gun", "I can't breathe", "someone is breaking in", "there is a fire"…), the agent asks no questions
+and responds as follows:
+
+| `DISPATCH_TRANSFER_NUMBER` | Agent says | Then |
 |---|---|---|
-| `escalate_emergency` | `https://YOUR-API/api/retell/functions/escalate_emergency` | `emergency_type` (string), `location` (string), `details` (string), `caller_name` (string) |
-| `request_human` | `https://YOUR-API/api/retell/functions/request_human` | `reason` (string) |
-| `log_service_request` | `https://YOUR-API/api/retell/functions/log_service_request` | `category` (enum: `Potholes`, `Traffic Signals`, `Noise & Other`), `location` (string), `description` (string), `caller_name` (string) |
+| Set (e.g. `+12135551234`) | "I am connecting you to an emergency dispatch team right now. Please stay on the line." | Runs `escalate_call` (cold transfer to that number) |
+| Empty | "This is an emergency. Please hang up and dial 911 now." | Asks nothing further |
 
-These functions **record** the escalation on the dashboard. They do **not** place a phone call to 911 themselves.
+Use a phone **you control** as stand-in dispatch. **Never real 911.**
 
-## 4. Call transfers (built-in "Transfer Call" functions)
+## Tools
 
-- `transfer_to_911`: transfer to your emergency dispatch number. **For demos, use a test number you
-  control, never real 911.**
-- `transfer_to_dispatcher`: transfer to the human dispatcher line.
+| Tool | Type | Needs public URL | Purpose |
+|---|---|---|---|
+| `end_call` | built-in | No | End the call |
+| `escalate_call` | built-in transfer | No | Emergency transfer to `DISPATCH_TRANSFER_NUMBER`. The dashboard marks the call Critical / Escalated to 911 when the transfer happens. |
+| `request_human` | custom → `/api/retell/functions/request_human` | Yes | Flag an urgent hazard for a human dispatcher |
+| `log_service_request` | custom → `/api/retell/functions/log_service_request` | Yes | Log a routine report and return a reference number |
 
-Transfers show up on the dashboard via `disconnection_reason: call_transfer`.
+## Categories
 
-## 5. Post-call analysis (Agent → Post-Call Analysis)
-
-Add these custom fields. The backend validates them against the database enums, and falls back to keyword
-triage over the transcript if any field is missing or invalid.
-
-| Field | Type | Description / choices |
+| Category | Priority | Examples |
 |---|---|---|
-| `category` | Enum | `Public Safety`, `Potholes`, `Traffic Signals`, `Noise & Other` |
-| `urgency_level` | Enum | `Critical` (life/safety threat, needs 911), `Urgent` (immediate hazard, needs a human), `Standard` (routine) |
-| `summary` | Text | One or two sentence dispatcher-facing summary |
-| `location` | Text | Location of the incident as stated by the caller |
-| `caller_name` | Text | Caller's name, if given |
+| Emergency / Active Danger | Critical (red) | Active crime, crashes with injuries, fires, medical emergencies, weapons, domestic violence |
+| Public Safety & Hazards | High (yellow) | Downed power lines, gas leaks, open fire hydrants, blocked intersections, active flooding |
+| Roads & Infrastructure | Standard (blue) | Potholes, broken traffic lights, damaged signs, sidewalk cracks, street light outages |
+| Utilities & Water | Standard (blue) | Water main breaks, sewer backups, power outages, fallen trees |
+| Code Enforcement & Sanitation | Routine (gray) | Illegal dumping, noise, abandoned vehicles, missed trash, graffiti |
 
-Note: a keyword safety net (weapons, injuries, fire, accidents, etc.) will upgrade a call to **Critical** even
-if the post-call analysis says otherwise. Explicit escalations (functions, transfers, dispatcher actions) are
-never downgraded by later automated triage.
+Emergency is always Critical, and Hazards are at least Urgent. A keyword safety net in `server/src/triage.js`
+forces Critical on life-safety words even if the AI analysis says otherwise.
+
+## Post-call analysis fields
+
+| Field | Type | Used for |
+|---|---|---|
+| `category` | enum (above) | Category |
+| `urgency_level` | enum `Critical` / `Urgent` / `Standard` | Urgency, and from it the status |
+| `summary` | text | Dashboard summary |
+| `location`, `caller_name` | text | Call details |
+| `executive_summary` | text | Formal report: official-tone summary |
+| `dispatch_recommendation` | enum: `911 / Police Dispatch`, `911 / Fire & EMS`, `Public Works`, `Water & Power`, `Sanitation & Code Enforcement`, `No Dispatch Required` | Formal report: routing |
+| `incident_type`, `involved_parties` | text | Formal report: entities |
+| `key_facts` | text, one per line | Formal report: key facts |
+
+`server/src/report.js` assembles these into `calls.formal_report`, filling anything missing from the call
+record. Its `incident_id` is `INC-<year>-<sequence>`.

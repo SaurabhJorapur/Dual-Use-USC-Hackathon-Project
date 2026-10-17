@@ -1,64 +1,106 @@
-import { useCallback, useMemo, useState } from 'react';
-import { LoaderCircle, TriangleAlert } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from './components/Header';
-import CriticalBanner from './components/CriticalBanner';
-import StatsCards from './components/StatsCards';
-import Filters, { EMPTY_FILTERS, applyFilters } from './components/Filters';
-import CallList from './components/CallList';
+import Sidebar from './components/Sidebar';
+import CityMap from './components/CityMap';
+import CallLogsView from './components/CallLogsView';
+import ClustersView from './components/ClustersView';
+import SimulationPage from './pages/SimulationPage';
+import StatusTicker from './components/StatusTicker';
 import CallDrawer from './components/CallDrawer';
+import { EMPTY_FILTERS } from './components/Filters';
 import { useCalls } from './hooks/useCalls';
 import { useNow } from './hooks/useNow';
+import { useRiskMap } from './hooks/useRiskMap';
+import { useClusters } from './hooks/useClusters';
+
+// Pages that also have their own address.
+const HASH_VIEWS = { '#/clusters': 'clusters', '#/simulation': 'simulation' };
+const VIEW_HASHES = Object.fromEntries(Object.entries(HASH_VIEWS).map(([hash, view]) => [view, hash]));
 
 export default function App() {
   const { calls, loading, error, connection, freshIds, upsertLocal } = useCalls();
+  const { hotspots } = useRiskMap();
+  // Shared by the clusters page and the call logs (which list a cluster as one entry).
+  const { clusters, loading: clustersLoading, error: clustersError, reload: reloadClusters } = useClusters();
   const now = useNow();
+  const [view, setView] = useState(() => HASH_VIEWS[window.location.hash] || 'map');
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [selectedId, setSelectedId] = useState(null);
+  const [focus, setFocus] = useState(null);
 
-  const visible = useMemo(() => applyFilters(calls, filters), [calls, filters]);
+  // The sidebar's category filter drives the map; the logs view adds search/urgency/status on top.
+  const mapCalls = useMemo(() => (filters.category ? calls.filter((c) => c.category === filters.category) : calls), [calls, filters.category]);
   // Look up by id so the open drawer reflects realtime updates to that call
   const selected = calls.find((c) => c.id === selectedId) || null;
   const close = useCallback(() => setSelectedId(null), []);
+  const openCall = useCallback((call) => setSelectedId(call.id), []);
+
+  useEffect(() => {
+    const onHash = () => HASH_VIEWS[window.location.hash] && setView(HASH_VIEWS[window.location.hash]);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  useEffect(() => {
+    const hash = VIEW_HASHES[view] || '';
+    if (window.location.hash !== hash) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
+  }, [view]);
+
+  const selectFromTicker = useCallback(
+    (call) => {
+      if (view === 'map' && call.latitude != null) setFocus({ lat: call.latitude, lng: call.longitude, zoom: 15, at: Date.now() });
+      setSelectedId(call.id);
+    },
+    [view],
+  );
+
+  // The Disaster Twin simulator is a full-screen page of its own; the dashboard below is unchanged.
+  if (view === 'simulation') return <SimulationPage onExit={() => setView('map')} />;
 
   return (
-    <div className="min-h-screen">
+    <div className="flex h-screen flex-col bg-slate-50">
       <Header connection={connection} />
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
-        <CriticalBanner calls={calls} now={now} onSelect={(c) => setSelectedId(c.id)} />
-        <StatsCards calls={calls} now={now} />
-
-        <section className="space-y-3">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-base font-semibold">Call log</h2>
-            <span className="text-sm text-slate-500">
-              {visible.length} of {calls.length} calls
-            </span>
-          </div>
-          <Filters filters={filters} onChange={setFilters} />
-
-          {error && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-inset ring-red-200">
-              <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
-              Couldn't load calls: {error}. Is the API server running?
-            </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <Sidebar
+          view={view}
+          onView={setView}
+          calls={calls}
+          now={now}
+          activeCategory={filters.category}
+          onSelectCategory={(category) => setFilters((f) => ({ ...f, category }))}
+          badges={{ logs: calls.length }}
+        />
+        {/* `isolate` keeps Leaflet's high z-index panes below the call drawer */}
+        <main className="relative isolate min-h-[70vh] min-w-0 flex-1 lg:min-h-0">
+          {view === 'map' && (
+            <CityMap
+              calls={mapCalls}
+              now={now}
+              hotspots={hotspots}
+              focus={focus}
+              onOpenCall={openCall}
+            />
           )}
-
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
-              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> Loading calls…
-            </div>
-          ) : (
-            <CallList
-              calls={visible}
+          {view === 'logs' && (
+            <CallLogsView
+              calls={calls}
+              clusters={clusters}
+              onReloadClusters={reloadClusters}
+              loading={loading}
+              error={error}
+              filters={filters}
+              onFilters={setFilters}
               freshIds={freshIds}
               now={now}
               selectedId={selectedId}
-              onSelect={(c) => setSelectedId(c.id)}
-              emptyMessage={calls.length ? 'No calls match these filters.' : 'No calls yet. Place a test call or run `npm run seed` in /server.'}
+              onSelect={openCall}
             />
           )}
-        </section>
-      </main>
+          {view === 'clusters' && (
+            <ClustersView calls={calls} clusters={clusters} loading={clustersLoading} error={clustersError} onReload={reloadClusters} now={now} />
+          )}
+        </main>
+      </div>
+      <StatusTicker calls={calls} now={now} freshIds={freshIds} onSelect={selectFromTicker} />
       <CallDrawer call={selected} onClose={close} onUpdated={upsertLocal} />
     </div>
   );

@@ -1,6 +1,8 @@
 import { supabase } from './supabase.js';
+import { geocode } from './geocode.js';
 import { timelineEvent } from './timeline.js';
-import { STATUSES, URGENCY_LEVELS } from './triage.js';
+import { queueClustering } from './clustering.js';
+import { DEFAULT_CATEGORY, EMERGENCY, STATUSES, URGENCY_LEVELS } from './triage.js';
 
 // Higher index = more severe. Used so a later event never downgrades an escalation.
 const STATUS_RANK = ['In Progress', 'AI Completed', 'Escalated to Human', 'Escalated to 911'];
@@ -29,7 +31,7 @@ export async function ensureCall(call) {
   const row = {
     retell_call_id: call.call_id,
     caller_phone: callerPhone(call),
-    category: 'Noise & Other',
+    category: DEFAULT_CATEGORY,
     urgency_level: 'Standard',
     status: 'In Progress',
     summary: 'Call in progress…',
@@ -45,6 +47,17 @@ export async function ensureCall(call) {
   if (error) throw error;
   // ignoreDuplicates returns no row if another request won the race
   return data || getByRetellId(call.call_id);
+}
+
+/**
+ * Map coordinates for a new or changed location. Skipped when the row has no latitude
+ * column (migration 03 not applied) so calls keep working without the map.
+ */
+export async function coordinatesFor(row, location) {
+  if (!location || !('latitude' in row)) return {};
+  if (row.latitude != null && row.location === location) return {};
+  const point = await geocode(location);
+  return point ? { latitude: point.lat, longitude: point.lng } : {};
 }
 
 /** Most severe explicit escalation recorded on the call's timeline, if any. */
@@ -68,16 +81,19 @@ export async function updateCall(retellCallId, patch, events = []) {
   if (floor) {
     next.status = mostSevere(STATUS_RANK, next.status || current.status, floor);
     next.urgency_level = mostSevere(URGENCY_RANK, next.urgency_level || current.urgency_level, URGENCY_FOR_STATUS[floor]);
-    if (floor === 'Escalated to 911') next.category = 'Public Safety';
+    if (floor === 'Escalated to 911') next.category = EMERGENCY;
   }
   // Don't overwrite details captured mid-call with nulls
   for (const key of ['location', 'caller_name']) {
     if (next[key] == null) delete next[key];
   }
   if (events.length) next.escalation_timeline = timeline;
+  Object.assign(next, await coordinatesFor(current, next.location));
 
   const { data, error } = await supabase.from('calls').update(next).eq('id', current.id).select().single();
   if (error) throw error;
+  // Group into incidents in the background: never awaited, so escalations aren't delayed.
+  queueClustering(data);
   return data;
 }
 
