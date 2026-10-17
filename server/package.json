@@ -1,0 +1,22 @@
+{
+  "name": "civic-call-center-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "seed": "node src/seed.js",
+    "test": "node --test src/",
+    "setup:retell": "node scripts/setup-retell.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.8",
+    "express": "^4.22.3",
+    "retell-sdk": "^6.2.7",
+    "ws": "^8.22.0"
+  }
+}
