@@ -82,6 +82,82 @@ CLUSTERS.forEach((c, ci) => {
   }
 });
 
+// One incident per category: several callers reporting the same thing from the same block within
+// an hour, so the clustering groups them (same category, within 150 m, under an hour apart).
+// `startMin` is how long ago the first call came in: under an hour shows as Active, older as History.
+const INCIDENTS = [
+  {
+    key: 'fire', category: 'Emergency / Active Danger', urgency: 'Critical', status: 'Escalated to 911',
+    street: 'S Vermont Ave', lat: 34.0331, lng: -118.2917, startMin: 34, gapMin: 6,
+    reports: [
+      'Smoke and flames coming from the second floor of an apartment building; residents are evacuating.',
+      'Apartment fire on Vermont, people on the balcony calling for help.',
+      'Heavy black smoke from a building near Vermont and Adams; caller hears smoke alarms.',
+      'Building on fire, a car parked in front is starting to catch.',
+      'Second report of a structure fire; fire trucks not on scene yet.',
+    ],
+  },
+  {
+    key: 'branch', category: 'Public Safety & Hazards', urgency: 'Urgent', status: 'Escalated to Human',
+    street: 'W Pico Blvd', lat: 34.0477, lng: -118.3437, startMin: 48, gapMin: 9,
+    reports: [
+      'Large tree branch down after the wind, blocking the eastbound lane.',
+      'Cars swerving around a fallen branch in the road on Pico.',
+      'Branch blocking a traffic lane and part of the crosswalk.',
+      'Fallen limb in the street near the bus stop; nobody hurt yet.',
+    ],
+  },
+  {
+    key: 'signal', category: 'Roads & Infrastructure', urgency: 'Urgent', status: 'Escalated to Human',
+    street: 'S Figueroa St', lat: 34.0187, lng: -118.2826, startMin: 40, gapMin: 7,
+    reports: [
+      'Traffic signal is out at Figueroa and Exposition, all directions dark.',
+      'Stoplight not working at a busy intersection by the museum.',
+      'Signal flashing then went dark; drivers treating it as a four-way stop.',
+      'Traffic light out near the school crossing on Figueroa.',
+      'Signal still out, traffic backing up on Exposition.',
+      'Broken traffic light, pedestrians having trouble crossing.',
+    ],
+  },
+  {
+    key: 'watermain', category: 'Utilities & Water', urgency: 'Urgent', status: 'Escalated to Human',
+    street: 'W Washington Blvd', lat: 34.0399, lng: -118.2671, startMin: 190, gapMin: 8,
+    reports: [
+      'Water gushing out of the street, looks like a water main break.',
+      'Street flooding on Washington Blvd, water coming up through the asphalt.',
+      'No water pressure in my building and the road outside is flooded.',
+      'Water main break, the flooding is reaching the sidewalk.',
+      'Big leak in the street near the storm drain, asphalt is buckling.',
+      'Flooded intersection from a broken pipe; cars driving slowly through it.',
+      'Water still pouring into the street from the main break.',
+    ],
+  },
+  {
+    key: 'dumping', category: 'Code Enforcement & Sanitation', urgency: 'Standard', status: 'AI Completed',
+    street: 'E 7th St', lat: 34.0386, lng: -118.2447, startMin: 320, gapMin: 11,
+    reports: [
+      'Someone dumped mattresses and furniture on the sidewalk overnight.',
+      'Pile of trash and old furniture blocking the sidewalk on 7th.',
+      'Illegal dumping next to the alley, bags of construction debris.',
+      'Couch and mattresses left on the curb, people walking in the street to get around.',
+    ],
+  },
+];
+INCIDENTS.forEach((inc, ii) => {
+  inc.reports.forEach((summary, i) => {
+    const ago = inc.startMin - i * inc.gapMin;
+    demo.push({
+      retell_call_id: `demo_incident_${inc.key}_${i}`, caller_phone: `+1323555${String(400 + ii * 10 + i).padStart(4, '0')}`, caller_name: null,
+      category: inc.category, urgency_level: inc.urgency, status: inc.status, summary,
+      location: `${1800 + i * 20} ${inc.street}`, created_at: minutesAgo(ago),
+      // Within ~70 m of each other, well inside the 150 m cluster radius.
+      latitude: inc.lat + ((i % 3) - 1) * 0.0003, longitude: inc.lng + ((i % 2) - 0.5) * 0.0004,
+      transcript: `Agent: City services line. What would you like to report?\nUser: ${summary}`,
+      escalation_timeline: [ev(ago, 'Call received'), ev(ago - 1, 'AI triage complete', `${inc.category} · ${inc.urgency}`)],
+    });
+  });
+});
+
 if (process.argv.includes('--clear')) {
   const { error } = await supabase.from('calls').delete().like('retell_call_id', 'demo_%');
   if (error) throw error;

@@ -1,12 +1,13 @@
 import { Bot, Construction, Droplets, Headset, Loader, Siren, Trash, TriangleAlert } from 'lucide-react';
 
-// Ordered by priority. `pill` is the active state of the category filter pills; `hex` colors map pins and charts.
+// Ordered by priority. Official municipal colors (red, amber, yellow, blue, gray), desaturated so
+// the dashboard reads calm. `pill` is the active state of the category filter pills; `hex` colors map pins and charts.
 export const CATEGORIES = {
-  'Emergency / Active Danger': { hex: '#dc2626', icon: Siren, color: 'text-red-600 bg-red-50', bar: 'bg-red-500', pill: 'bg-red-600 text-white ring-red-600' },
-  'Public Safety & Hazards': { hex: '#f59e0b', icon: TriangleAlert, color: 'text-amber-700 bg-amber-50', bar: 'bg-amber-400', pill: 'bg-amber-400 text-amber-950 ring-amber-400' },
-  'Roads & Infrastructure': { hex: '#2563eb', icon: Construction, color: 'text-blue-700 bg-blue-50', bar: 'bg-blue-500', pill: 'bg-blue-600 text-white ring-blue-600' },
-  'Utilities & Water': { hex: '#0284c7', icon: Droplets, color: 'text-sky-700 bg-sky-50', bar: 'bg-sky-500', pill: 'bg-sky-600 text-white ring-sky-600' },
-  'Code Enforcement & Sanitation': { hex: '#64748b', icon: Trash, color: 'text-slate-600 bg-slate-100', bar: 'bg-slate-400', pill: 'bg-slate-600 text-white ring-slate-600' },
+  'Emergency / Active Danger': { hex: '#b4544e', icon: Siren, color: 'text-[#9a4540] bg-[#b4544e]/10', bar: 'bg-[#b4544e]', pill: 'bg-[#b4544e] text-white ring-[#b4544e]' },
+  'Public Safety & Hazards': { hex: '#c4843f', icon: TriangleAlert, color: 'text-[#9c6630] bg-[#c4843f]/10', bar: 'bg-[#c4843f]', pill: 'bg-[#c4843f] text-white ring-[#c4843f]' },
+  'Roads & Infrastructure': { hex: '#b5a04a', icon: Construction, color: 'text-[#857532] bg-[#b5a04a]/15', bar: 'bg-[#b5a04a]', pill: 'bg-[#b5a04a] text-slate-900 ring-[#b5a04a]' },
+  'Utilities & Water': { hex: '#5a7ca3', icon: Droplets, color: 'text-[#46658a] bg-[#5a7ca3]/10', bar: 'bg-[#5a7ca3]', pill: 'bg-[#5a7ca3] text-white ring-[#5a7ca3]' },
+  'Code Enforcement & Sanitation': { hex: '#7d8796', icon: Trash, color: 'text-slate-600 bg-slate-100', bar: 'bg-[#7d8796]', pill: 'bg-[#7d8796] text-white ring-[#7d8796]' },
 };
 
 export const DEFAULT_CATEGORY = 'Code Enforcement & Sanitation';

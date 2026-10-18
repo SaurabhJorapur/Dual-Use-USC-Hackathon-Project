@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Clock, FileText, MapPin, Phone, User, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bot, Clock, FileText, Hand, Headset, MapPin, Phone, Repeat, TriangleAlert, User, X } from 'lucide-react';
 import { CategoryIcon, StatusBadge, UrgencyBadge } from './Badges';
 import IncidentReport from './IncidentReport';
 import { STATUS } from '../lib/constants';
 import { api } from '../lib/api';
 import { clockTime, formatPhone, isWebReport } from '../lib/format';
+import { detectAgentLoop, parseTranscript } from '../lib/agentLoop';
 
 function Field({ icon: Icon, label, children }) {
   return (
@@ -56,10 +57,71 @@ function Timeline({ events }) {
   );
 }
 
-export default function CallDrawer({ call, onClose, onUpdated }) {
+function AiModeBadge({ override, live }) {
+  if (override) {
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-amber-500 px-2 py-0.5 text-xs font-bold text-amber-950">
+        ⚠️ Manual Dispatch Mode (Operator Active)
+      </span>
+    );
+  }
+  if (!live) return null;
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-300">
+      <Bot className="h-3.5 w-3.5" aria-hidden /> AI Active / Listening
+    </span>
+  );
+}
+
+function LoopBanner({ phrase, onTakeOver, onTransfer, onDismiss, transferring, transferred }) {
+  return (
+    <div role="alert" className="border-b-2 border-red-700 bg-red-600 px-5 py-3 text-white">
+      <p className="flex items-center gap-2 text-sm font-bold">
+        <Repeat className="h-4 w-4 shrink-0" aria-hidden />
+        Agent Loop Detected — Manual Dispatch Advised
+      </p>
+      {phrase && <p className="mt-1 truncate text-xs text-red-100">Repeating: “{phrase}”</p>}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button onClick={onTakeOver} className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-bold text-red-700 hover:bg-red-50">
+          <Hand className="h-3.5 w-3.5" aria-hidden /> Operator Override
+        </button>
+        {!transferred && (
+          <button
+            onClick={onTransfer}
+            disabled={transferring}
+            className="inline-flex items-center gap-1.5 rounded-md bg-red-800 px-2.5 py-1 text-xs font-semibold text-white ring-1 ring-inset ring-red-300 hover:bg-red-900 disabled:opacity-60"
+          >
+            <Headset className="h-3.5 w-3.5" aria-hidden /> Transfer to human dispatcher
+          </button>
+        )}
+        <button onClick={onDismiss} className="ml-auto rounded-md px-2 py-1 text-xs text-red-100 hover:bg-red-700">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function CallDrawer({ call, onClose, onUpdated, override = false, onOverride }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('report');
+  const [notice, setNotice] = useState(null);
+  const [loopFlagged, setLoopFlagged] = useState(false);
+  const [loopDismissed, setLoopDismissed] = useState(false);
+  const loop = useMemo(() => detectAgentLoop(parseTranscript(call?.transcript)), [call?.transcript]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  useEffect(() => {
+    setNotice(null);
+    setLoopFlagged(false);
+    setLoopDismissed(false);
+  }, [call?.id]);
 
   useEffect(() => {
     setError(null);
@@ -70,6 +132,30 @@ export default function CallDrawer({ call, onClose, onUpdated }) {
 
   if (!call) return null;
   const web = isWebReport(call);
+  // Web reports have no AI agent on the line, so there is nothing to take over.
+  const aiCall = !web;
+  const showLoop = aiCall && (loop.looping || loopFlagged) && !override && !loopDismissed;
+
+  const setOverride = async (on) => {
+    // A live call is handed to the operator's phone; a finished one only changes how it is shown.
+    if (on && call.status === 'In Progress') {
+      setSaving(true);
+      setError(null);
+      try {
+        onUpdated(await api.takeOverCall(call.id));
+      } catch (err) {
+        setNotice(`Could not transfer the call: ${err.message}`);
+        return;
+      } finally {
+        setSaving(false);
+      }
+      onOverride?.(call.id, true);
+      setNotice('AI Agent muted. Operator has taken manual control of dispatch. Transferring the caller to the operator line…');
+      return;
+    }
+    onOverride?.(call.id, on);
+    setNotice(on ? 'Operator has taken manual control of dispatch.' : 'AI agent control resumed.');
+  };
 
   const changeStatus = async (status) => {
     if (status === call.status) return;
@@ -94,6 +180,7 @@ export default function CallDrawer({ call, onClose, onUpdated }) {
             <div className="flex flex-wrap items-center gap-2">
               <UrgencyBadge level={call.urgency_level} />
               <StatusBadge status={call.status} />
+              {aiCall && <AiModeBadge override={override} live={call.status === 'In Progress'} />}
             </div>
             <h2 className="mt-1 text-base font-semibold">{call.category}</h2>
             <p className="text-xs text-slate-500">{new Date(call.created_at).toLocaleString()}</p>
@@ -102,6 +189,61 @@ export default function CallDrawer({ call, onClose, onUpdated }) {
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {showLoop && (
+          <LoopBanner
+            phrase={loop.phrase}
+            onTakeOver={() => setOverride(true)}
+            onTransfer={() => changeStatus('Escalated to Human')}
+            onDismiss={() => setLoopDismissed(true)}
+            transferring={saving}
+            transferred={call.status === 'Escalated to Human'}
+          />
+        )}
+
+        {aiCall && (
+          <div className={`border-b px-5 py-3 ${override ? 'border-amber-300 bg-amber-50' : 'border-slate-200'}`}>
+            {override ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="flex flex-1 items-center gap-1.5 text-sm font-semibold text-amber-900">
+                  <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden /> Operator is handling dispatch manually
+                </p>
+                <button
+                  onClick={() => setOverride(false)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
+                >
+                  <Bot className="h-4 w-4" aria-hidden /> Resume AI control
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setOverride(true)}
+                  disabled={saving}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-amber-950 shadow-sm ring-2 ring-amber-600 hover:bg-amber-400 disabled:opacity-60"
+                >
+                  <Hand className="h-4 w-4" aria-hidden /> {saving ? 'Transferring…' : 'Take Over Call (Operator Override)'}
+                </button>
+                {!showLoop && (
+                  <button
+                    onClick={() => {
+                      setLoopFlagged(true);
+                      setLoopDismissed(false);
+                    }}
+                    className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    Flag agent loop
+                  </button>
+                )}
+              </div>
+            )}
+            {notice && (
+              <p role="status" className="mt-2 rounded-md bg-slate-900 px-3 py-2 text-sm text-white">
+                {notice}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
           <section>

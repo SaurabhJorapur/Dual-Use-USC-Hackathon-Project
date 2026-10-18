@@ -9,11 +9,11 @@ npm run setup:retell
 
 No public URL or tunnel is involved: the agent has no webhook, and the server polls Retell for its calls every
 5 seconds. Rerun the script whenever the prompt or `DISPATCH_TRANSFER_NUMBER` changes. Each run creates and
-publishes a new **version** of the same "CivicLine Dispatch" agent (not a new agent). Phone numbers are bought
-separately in the Retell dashboard (Phone Numbers → Buy), with the inbound agent set to **CivicLine Dispatch**.
+publishes a new **version** of the same "CityLine Dispatch" agent (not a new agent). Phone numbers are bought
+separately in the Retell dashboard (Phone Numbers → Buy), with the inbound agent set to **CityLine Dispatch**.
 
 Retell pins each phone number to a specific agent version. After publishing, the script moves every number that
-routes to CivicLine Dispatch to the new version, so phone calls and browser test calls run the same config.
+routes to CityLine Dispatch to the new version, so phone calls and browser test calls run the same config.
 
 ## Prompt
 

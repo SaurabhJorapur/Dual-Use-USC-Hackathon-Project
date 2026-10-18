@@ -3,6 +3,10 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { TrendingUp } from 'lucide-react';
 import { hourlyBuckets, surgeInfo } from '../lib/stats';
 
+const AXIS = { stroke: '#cbd5e1' };
+const TICK = { fontSize: 10, fill: '#64748b' };
+const AXIS_TITLE = { fontSize: 10, fill: '#64748b' };
+
 function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const b = payload[0].payload;
@@ -35,24 +39,31 @@ export default function SurgeChart({ calls, now }) {
           <span className="text-[11px] text-slate-400">{info.total} calls</span>
         )}
       </div>
-      <div className="h-28">
+      <div className="h-36">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={buckets} margin={{ top: 6, right: 4, bottom: 0, left: 0 }}>
+          <AreaChart data={buckets} margin={{ top: 6, right: 4, bottom: 12, left: 0 }}>
             <defs>
               <linearGradient id="surgeOther" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#5a7ca3" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#5a7ca3" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="surgeEmergency" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#dc2626" stopOpacity={0.6} />
-                <stop offset="100%" stopColor="#dc2626" stopOpacity={0.05} />
+                <stop offset="0%" stopColor="#b4544e" stopOpacity={0.6} />
+                <stop offset="100%" stopColor="#b4544e" stopOpacity={0.05} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="label" interval={5} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={22} />
+            <XAxis dataKey="label" interval={5} tick={TICK} tickLine={AXIS} axisLine={AXIS} label={{ value: 'Hour', position: 'insideBottom', offset: -10, ...AXIS_TITLE }} />
+            <YAxis
+              allowDecimals={false}
+              tick={TICK}
+              tickLine={AXIS}
+              axisLine={AXIS}
+              width={34}
+              label={{ value: 'Calls', angle: -90, position: 'insideLeft', offset: 10, style: { textAnchor: 'middle' }, ...AXIS_TITLE }}
+            />
             <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#cbd5e1' }} />
-            <Area type="monotone" dataKey="other" stackId="1" stroke="#2563eb" strokeWidth={1.5} fill="url(#surgeOther)" isAnimationActive={false} />
-            <Area type="monotone" dataKey="emergency" stackId="1" stroke="#dc2626" strokeWidth={1.5} fill="url(#surgeEmergency)" isAnimationActive={false} />
+            <Area type="monotone" dataKey="other" stackId="1" stroke="#5a7ca3" strokeWidth={1.5} fill="url(#surgeOther)" isAnimationActive={false} />
+            <Area type="monotone" dataKey="emergency" stackId="1" stroke="#b4544e" strokeWidth={1.5} fill="url(#surgeEmergency)" isAnimationActive={false} />
           </AreaChart>
         </ResponsiveContainer>
       </div>

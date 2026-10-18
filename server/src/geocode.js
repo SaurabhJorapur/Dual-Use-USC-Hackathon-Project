@@ -3,7 +3,7 @@
 // intersections), then Photon and Nominatim (OpenStreetMap) for landmarks and partial
 // names. Results are restricted to the Los Angeles area. Never throws: returns null.
 
-const UA = { 'User-Agent': 'CivicLine/1.0 (municipal call triage demo)' };
+const UA = { 'User-Agent': 'CityLine/1.0 (municipal call triage demo)' };
 // west, south, east, north
 const BOX = { west: -118.95, south: 33.65, east: -117.9, north: 34.4 };
 const CENTER = { lat: 34.0522, lng: -118.2437 };

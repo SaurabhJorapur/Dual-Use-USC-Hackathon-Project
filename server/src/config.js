@@ -13,6 +13,7 @@ export const config = {
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   retellApiKey: process.env.RETELL_API_KEY,
   retellAgentId: process.env.RETELL_AGENT_ID,
+  operatorTransferNumber: (process.env.OPERATOR_TRANSFER_NUMBER || '').trim(),
 };
 
 export function assertConfig() {

@@ -6,7 +6,7 @@ const VIEWS = [
   { id: 'map', label: 'Live City Map', icon: MapIcon },
   { id: 'logs', label: 'Call Logs & Records', icon: FileText },
   { id: 'clusters', label: 'Incident Clusters', icon: Layers },
-  { id: 'simulation', label: 'Disaster Twin Simulator 🔮', icon: Radar },
+  { id: 'simulation', label: 'Disaster Simulator', icon: Radar },
 ];
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -18,6 +18,7 @@ export default function Sidebar({ view, onView, calls, now, activeCategory, onSe
 
   return (
     <aside className="flex shrink-0 flex-col gap-5 overflow-y-auto border-b border-slate-200 bg-white p-4 lg:w-[340px] lg:border-b-0 lg:border-r">
+      <h1 className="px-1 text-lg font-semibold leading-tight">CityLine</h1>
       <nav className="space-y-1" aria-label="Views">
         {VIEWS.map(({ id, label, icon: Icon }) => {
           const active = view === id;

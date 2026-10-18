@@ -8,14 +8,14 @@ export const ACTIVE_WINDOW_MS = HOUR;
 
 // One color per issue type, used by the cards, chart and legend on this page only.
 export const ISSUE_TYPES = {
-  'Emergency / Active Danger': { short: 'Emergency', legend: 'Emergency / safety', hex: '#dc2626' },
-  'Public Safety & Hazards': { short: 'Hazard', legend: 'Traffic signals & road hazards', hex: '#ea580c' },
-  'Roads & Infrastructure': { short: 'Road damage', legend: 'Potholes & road damage', hex: '#ca8a04' },
-  'Utilities & Water': { short: 'Utility outage', legend: 'Power, water & utilities', hex: '#2563eb' },
-  'Code Enforcement & Sanitation': { short: 'Noise / code issue', legend: 'Noise, disturbances & sanitation', hex: '#7c3aed' },
+  'Emergency / Active Danger': { short: 'Emergency', legend: 'Emergency / safety', hex: '#b4544e' },
+  'Public Safety & Hazards': { short: 'Hazard', legend: 'Traffic signals & road hazards', hex: '#c4843f' },
+  'Roads & Infrastructure': { short: 'Road damage', legend: 'Potholes & road damage', hex: '#b5a04a' },
+  'Utilities & Water': { short: 'Utility outage', legend: 'Power, water & utilities', hex: '#5a7ca3' },
+  'Code Enforcement & Sanitation': { short: 'Noise / code issue', legend: 'Noise, disturbances & sanitation', hex: '#7d8796' },
 };
-export const OTHER_ISSUE = { short: 'Report', legend: 'Other / uncategorized', hex: '#64748b' };
-export const UNCLUSTERED_HEX = '#cbd5e1';
+export const OTHER_ISSUE = { short: 'Report', legend: 'Other / uncategorized', hex: '#a7afba' };
+export const UNCLUSTERED_HEX = '#d6dbe2';
 export const issueType = (category) => ISSUE_TYPES[category] || OTHER_ISSUE;
 
 const URGENCY_BOOST = { Critical: 40, Urgent: 20, Standard: 0 };

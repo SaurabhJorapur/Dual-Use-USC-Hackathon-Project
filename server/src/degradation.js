@@ -1,4 +1,4 @@
-// Runs the trained streetlight degradation model (scripts/train_model.py) through a
+// Runs the trained public safety risk model (scripts/train_model.py) through a
 // long-lived Python worker (scripts/predict_worker.py): spawned on first use, it loads the
 // model once and answers one JSON line per request, so predictions take milliseconds.
 import { spawn } from 'node:child_process';
@@ -17,8 +17,8 @@ const httpError = (statusCode, message) => Object.assign(new Error(message), { s
 
 /** Validates the POST body; returns the normalized request or throws a 400. */
 export function parsePredictInput(body = {}) {
-  const zipcode = body.zipcode == null || body.zipcode === '' ? null : String(body.zipcode).trim();
-  if (zipcode && !/^\d{5}$/.test(zipcode)) throw httpError(400, 'zipcode must be 5 digits');
+  const area = body.area == null || body.area === '' ? null : String(body.area).trim();
+  if (area && (area.length > 40 || !/^[\w .'-]+$/.test(area))) throw httpError(400, 'area must be an LAPD area name');
 
   const hasLat = body.latitude != null && body.latitude !== '';
   const hasLng = body.longitude != null && body.longitude !== '';
@@ -27,13 +27,8 @@ export function parsePredictInput(body = {}) {
   const longitude = hasLng ? Number(body.longitude) : null;
   if (hasLat && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) throw httpError(400, 'latitude is invalid');
   if (hasLng && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)) throw httpError(400, 'longitude is invalid');
-  if (!zipcode && !hasLat) throw httpError(400, 'Provide a zipcode or latitude/longitude');
-
-  const days = Number(body.days_since_repair);
-  if (body.days_since_repair == null || body.days_since_repair === '' || !Number.isFinite(days) || days < 0 || days > 36500) {
-    throw httpError(400, 'days_since_repair must be a number of days (0 or more)');
-  }
-  return { zipcode, latitude, longitude, days_since_repair: days };
+  if (!area && !hasLat) throw httpError(400, 'Provide latitude/longitude or an LAPD area');
+  return { area, latitude, longitude };
 }
 
 let worker = null;

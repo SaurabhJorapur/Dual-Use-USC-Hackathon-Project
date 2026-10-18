@@ -88,7 +88,7 @@ export default function IncidentReport({ report, call }) {
             <span className="inline-flex items-center gap-1 rounded bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white">
               <BadgeCheck className="h-3 w-3" aria-hidden /> Official Incident Report
             </span>
-            <h4 className="mt-2 font-serif text-lg font-semibold text-slate-900">
+            <h4 className="mt-2 font-sans text-lg font-semibold text-slate-900">
               Municipal Incident Report{report.type === 'cluster' ? ` · ${report.consolidated_calls.length} calls` : ''}
             </h4>
             <p className="font-mono text-sm text-slate-700">{report.incident_id}</p>
@@ -116,14 +116,14 @@ export default function IncidentReport({ report, call }) {
           <CategoryIcon category={report.classification?.category} size="h-7 w-7" />
           <span className="text-sm font-medium text-slate-900">{report.classification?.category}</span>
           <UrgencyBadge level={report.classification?.urgency_level} />
-          <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200">
+          <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300">
             <Send className="h-3 w-3" aria-hidden /> Route to: {report.dispatch_recommendation}
           </span>
         </section>
 
         <section>
           <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Executive summary</h5>
-          <p className="font-serif text-sm leading-relaxed text-slate-900">{report.executive_summary}</p>
+          <p className="font-sans text-sm leading-relaxed text-slate-900">{report.executive_summary}</p>
         </section>
 
         <section>

@@ -127,7 +127,7 @@ export default function ReportPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <main className="mx-auto max-w-xl px-4 py-6 sm:py-12">
-        <p className="text-sm font-semibold text-slate-500">CivicLine</p>
+        <p className="text-sm font-semibold text-slate-500">CityLine</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Submit a Crisis Report</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
           Describe what is happening. Your report will be saved on this device if the connection drops and sent when connectivity returns.

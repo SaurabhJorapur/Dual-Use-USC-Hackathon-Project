@@ -1,64 +1,88 @@
 {
   "model_type": "HistGradientBoostingClassifier",
-  "trained_at": "2026-10-17T17:45:51+00:00",
-  "data_as_of": "2025-03-31",
+  "trained_at": "2026-10-18T03:37:56+00:00",
+  "data_as_of": "2024-03-31",
+  "data_from": "2020-01-01",
   "source_files": [
-    "MyLA311-Service-Request-Data-2020.csv",
-    "MyLA311-Service-Request-Data-2021.csv",
-    "MyLA311-Service-Request-Data-2022.csv",
-    "MyLA311-Service-Request-Data-2023.csv",
-    "MyLA311-Service-Request-Data-2024-Oct 17.csv",
-    "MyLA311-Service-Request-Data-2025 Oct 17.csv"
+    "Crime_Data_from_2020_to_2024_20261017.csv",
+    "Traffic_Collision_Data_from_2010_to_Present_20261017.csv"
   ],
-  "request_types": [
-    "Single Streetlight Issue",
-    "Multiple Streetlight Issue"
+  "target": "serious_incident_90d: a violent crime or an injury collision (fatal, severe or visible injury) in the same ~100 m cell within 90 days",
+  "violent_crime_codes": [
+    "110",
+    "113",
+    "121",
+    "122",
+    "210",
+    "220",
+    "230",
+    "231",
+    "235",
+    "236",
+    "250",
+    "251",
+    "753",
+    "761",
+    "815",
+    "820",
+    "821",
+    "910",
+    "920"
   ],
-  "patch_types": {
-    "0": "Single Streetlight Issue",
-    "1": "Multiple Streetlight Issue"
-  },
-  "target": "failed_again_90d: a new streetlight request in the same ~100 m cell within 90 days",
+  "injury_mo_codes": [
+    "3024",
+    "3025",
+    "3027"
+  ],
   "cell": "lat/lng rounded to 3 decimals (~111 m x 92 m)",
   "features": [
-    "days_since_last_patch",
-    "past_311_density",
-    "recent_311_density_365d",
-    "avg_resolution_days",
-    "patch_type_code"
+    "crime_count_365d",
+    "collision_count_365d",
+    "violent_count_365d",
+    "injury_collision_count_365d",
+    "recent_incidents_90d",
+    "days_since_last_incident",
+    "days_since_last_serious",
+    "weapon_share_365d",
+    "night_share_365d",
+    "area_incidents_per_cell_365d"
   ],
   "feature_reference": {
-    "days_since_last_patch": 416.22,
-    "past_311_density": 1.0,
-    "recent_311_density_365d": 0.0,
-    "avg_resolution_days": 66.0,
-    "patch_type_code": 0.0
+    "crime_count_365d": 3.0,
+    "collision_count_365d": 0.0,
+    "violent_count_365d": 0.0,
+    "injury_collision_count_365d": 0.0,
+    "recent_incidents_90d": 1.0,
+    "days_since_last_incident": 70.0,
+    "days_since_last_serious": 400.0,
+    "weapon_share_365d": 0.167,
+    "night_share_365d": 0.333,
+    "area_incidents_per_cell_365d": 5.856
   },
-  "global_avg_resolution_days": 62.69,
   "risk_thresholds": {
-    "HIGH": 30.8,
-    "MEDIUM": 15.3
+    "HIGH": 39.4,
+    "MEDIUM": 15.1
   },
   "recommended_actions": {
-    "HIGH": "Schedule Proactive Inspection within 14 Days",
-    "MEDIUM": "Add to Next Routine Inspection Cycle (within 45 Days)",
-    "LOW": "No Action Needed; Continue Monitoring"
+    "HIGH": "Prioritize for patrol presence and a traffic-safety review within 14 days",
+    "MEDIUM": "Include in the next routine patrol and street-safety cycle (within 45 days)",
+    "LOW": "No action needed; continue monitoring"
   },
   "metrics": {
-    "auc_roc": 0.6978,
-    "average_precision": 0.303,
-    "base_rate": 0.1441,
+    "auc_roc": 0.837,
+    "average_precision": 0.5626,
+    "base_rate": 0.1483,
     "high": {
-      "threshold": 30.8,
-      "precision": 0.372,
-      "recall": 0.259
+      "threshold": 39.4,
+      "precision": 0.619,
+      "recall": 0.417
     },
     "medium_or_high": {
-      "threshold": 15.3,
-      "precision": 0.276,
-      "recall": 0.575
+      "threshold": 15.1,
+      "precision": 0.369,
+      "recall": 0.746
     },
-    "train_rows": 155070,
-    "test_rows": 107265
+    "train_rows": 311006,
+    "test_rows": 130241
   }
 }

@@ -1,0 +1,350 @@
+// Disaster Simulator: building blocks for the local scenario generator (lib/simulation.js).
+// Everything is fictional except the neighborhood coordinates, which are real Los Angeles places.
+
+export const SEVERITIES = ['critical', 'hazard', 'routine'];
+
+const E = 'Emergency / Active Danger';
+const P = 'Public Safety & Hazards';
+const R = 'Roads & Infrastructure';
+const U = 'Utilities & Water';
+const C = 'Code Enforcement & Sanitation';
+
+// `aliases` are extra words that select the neighborhood from a free-text description.
+export const NEIGHBORHOODS = [
+  { name: 'Downtown', lat: 34.0488, lng: -118.2518, aliases: ['dtla', 'downtown', 'civic center'] },
+  { name: 'Koreatown', lat: 34.0618, lng: -118.3005, aliases: ['k-town', 'ktown'] },
+  { name: 'Westlake', lat: 34.056, lng: -118.278, aliases: ['macarthur park'] },
+  { name: 'Echo Park', lat: 34.078, lng: -118.2606, aliases: [] },
+  { name: 'Silver Lake', lat: 34.087, lng: -118.27, aliases: ['silverlake'] },
+  { name: 'Los Feliz', lat: 34.109, lng: -118.288, aliases: ['griffith park'] },
+  { name: 'Hollywood', lat: 34.0983, lng: -118.3267, aliases: [] },
+  { name: 'Boyle Heights', lat: 34.0335, lng: -118.205, aliases: ['east la', 'eastside'] },
+  { name: 'Highland Park', lat: 34.1115, lng: -118.1925, aliases: ['northeast la', 'arroyo seco'] },
+  { name: 'Mt. Washington', lat: 34.0995, lng: -118.214, aliases: ['mount washington'] },
+  { name: 'Mid-City', lat: 34.045, lng: -118.35, aliases: ['midcity'] },
+  { name: 'Leimert Park', lat: 34.008, lng: -118.332, aliases: ['crenshaw'] },
+  { name: 'South LA', lat: 33.96, lng: -118.278, aliases: ['south central', 'south los angeles', 'watts'] },
+  { name: 'Exposition Park', lat: 34.0251, lng: -118.2851, aliases: ['usc', 'coliseum'] },
+  { name: 'Westwood', lat: 34.063, lng: -118.445, aliases: ['ucla'] },
+  { name: 'Venice', lat: 33.985, lng: -118.469, aliases: ['venice beach'] },
+  { name: 'Pacific Palisades', lat: 34.048, lng: -118.526, aliases: ['palisades', 'the palisades'] },
+  { name: 'Brentwood', lat: 34.052, lng: -118.476, aliases: [] },
+  { name: 'Sherman Oaks', lat: 34.1478, lng: -118.4415, aliases: [] },
+  { name: 'Studio City', lat: 34.143, lng: -118.396, aliases: [] },
+  { name: 'Van Nuys', lat: 34.1866, lng: -118.449, aliases: ['the valley', 'san fernando valley', 'valley'] },
+  { name: 'North Hollywood', lat: 34.172, lng: -118.379, aliases: ['noho'] },
+  { name: 'Sun Valley', lat: 34.217, lng: -118.37, aliases: [] },
+  { name: 'Northridge', lat: 34.228, lng: -118.536, aliases: ['csun'] },
+  { name: 'Encino', lat: 34.159, lng: -118.501, aliases: ['sepulveda basin'] },
+  { name: 'Chatsworth', lat: 34.257, lng: -118.601, aliases: [] },
+  { name: 'Sylmar', lat: 34.307, lng: -118.449, aliases: [] },
+  { name: 'San Pedro', lat: 33.736, lng: -118.292, aliases: ['port of la', 'port of los angeles', 'the port', 'harbor'] },
+  { name: 'Wilmington', lat: 33.78, lng: -118.262, aliases: ['refinery'] },
+  { name: 'Westchester', lat: 33.958, lng: -118.401, aliases: ['lax', 'airport'] },
+  { name: 'Eagle Rock', lat: 34.139, lng: -118.213, aliases: [] },
+];
+
+// Bounds every generated call is clamped to.
+export const LA_BOUNDS = { minLat: 33.72, maxLat: 34.33, minLng: -118.66, maxLng: -118.16 };
+
+const t = (severity, category, title, detail) => ({ severity, category, title, detail });
+
+// Shared everyday calls, mixed into every scenario (and the whole of a "normal" day).
+export const ROUTINE_TEMPLATES = [
+  t('routine', R, 'Pothole in right lane', 'Deep pothole reported near {place}; repair ticket logged.'),
+  t('routine', R, 'Streetlight out', 'Streetlight dark for two nights, {place}.'),
+  t('routine', C, 'Illegal dumping', 'Mattress and furniture left on the sidewalk, {place}.'),
+  t('routine', U, 'Minor water leak', 'Leak at a meter box, {place}; DWP notified.'),
+  t('routine', C, 'Graffiti removal request', 'Tagging on a retaining wall, {place}.'),
+  t('routine', C, 'Noise complaint', 'Construction before permitted hours, {place}.'),
+  t('hazard', P, 'Traffic signal flashing red', 'Signal in flash mode at a busy intersection, {place}.'),
+  t('routine', C, 'Missed trash pickup', 'Bins missed on the whole block, {place}.'),
+];
+
+/**
+ * Each type: keywords that select it, a timing curve (`spike` = sudden onset, `ramp` = builds up),
+ * how many hours it spans, how its call volume splits across categories, call templates,
+ * and text for the banner / recommendation / actions. Text slots: {area}, {place}, {intensityWord},
+ * {multiple}, {units}.
+ */
+export const DISASTER_TYPES = {
+  earthquake: {
+    label: 'Earthquake',
+    emoji: '🔴',
+    tone: 'red',
+    keywords: ['earthquake', 'quake', 'seismic', 'tremor', 'aftershock', 'magnitude', 'shaking', 'fault'],
+    curve: 'spike',
+    durationHours: 6,
+    categoryWeights: { [E]: 0.3, [P]: 0.26, [R]: 0.14, [U]: 0.25, [C]: 0.05 },
+    templates: [
+      t('critical', E, 'Soft-story building collapse', 'Apartment building collapsed onto its carport, {place}. Residents reported trapped.'),
+      t('critical', E, 'Gas main rupture and fire', 'Ruptured gas main ignited near {place}; homes involved.'),
+      t('critical', P, 'Freeway overpass damage', 'Visible cracking on an overpass near {place}; vehicles stopped on the deck.'),
+      t('critical', E, 'Residential structure fire', 'Apartment fire after the shaking, {place}; residents evacuating.'),
+      t('critical', E, 'Occupants trapped in stairwell', 'Mid-rise stairwell blocked by debris, {place}.'),
+      t('hazard', U, 'Downed power lines', 'Live lines across the road, {place}; area dark.'),
+      t('hazard', U, 'Water main break', 'Large main break flooding the street, {place}.'),
+      t('hazard', R, 'Ruptured pavement', 'Road buckled across all lanes, {place}.'),
+      t('hazard', P, 'Traffic signals dark', 'Signals out across {place}; intersections without power.'),
+      t('hazard', P, 'Landslide onto roadway', 'Hillside slipped onto the road near {place}; one lane blocked.'),
+      t('hazard', U, 'Strong gas odor reports', 'Multiple callers report gas odor around {place}.'),
+      t('hazard', P, 'Facade and glass debris', 'Glass panels fallen onto the sidewalk, {place}.'),
+      t('routine', C, 'Car alarms and noise', 'Dozens of car alarms going off, {place}; no injuries.'),
+      t('routine', R, 'Cracked sidewalk', 'New sidewalk cracks, {place}; no hazard to traffic.'),
+    ],
+    banner: '{intensityWord} earthquake centered near {area}. Call volume at {multiple}× normal. Collapses, gas leaks and road damage reported.',
+    recommendation: 'Activate the EOC and deploy {units} USAR and engine companies to {area}; pre-position gas shutoff crews on the surrounding corridor.',
+    actions: [
+      'Inspect and close damaged overpasses near {area}',
+      'Request DWP and SoCalGas emergency shutoff crews',
+      'Open shelters at the Convention Center and Pan Pacific Park',
+      'Stage extra dispatchers; route Standard calls to the AI line only',
+      'Request mutual aid from LA County Fire',
+      'Issue a citywide aftershock safety alert',
+    ],
+  },
+
+  wildfire: {
+    label: 'Wildfire',
+    emoji: '🔥',
+    tone: 'orange',
+    keywords: ['fire', 'wildfire', 'blaze', 'brush', 'smoke', 'burn', 'flames', 'santa ana', 'embers', 'red flag'],
+    curve: 'ramp',
+    durationHours: 10,
+    categoryWeights: { [E]: 0.32, [P]: 0.34, [R]: 0.08, [U]: 0.18, [C]: 0.08 },
+    templates: [
+      t('critical', E, 'Homes threatened by fire front', 'Flames reaching backyards on the hillside, {place}.'),
+      t('critical', E, 'Residents trapped by fire', 'Family unable to evacuate, road blocked by flames near {place}.'),
+      t('critical', E, 'Structure fully involved', 'House fully engulfed from wind-driven embers, {place}.'),
+      t('critical', P, 'Evacuation route blocked', 'Gridlock on the only road out of {place}; fire approaching.'),
+      t('critical', E, 'Spot fire across the freeway', 'Embers jumped the freeway and ignited brush near {place}.'),
+      t('hazard', P, 'Heavy smoke, low visibility', 'Drivers reporting near-zero visibility, {place}.'),
+      t('hazard', U, 'Power shutoff (PSPS)', 'Preemptive power shutoff in effect, {place}.'),
+      t('hazard', U, 'Hydrant pressure low', 'Crews report low hydrant pressure, {place}.'),
+      t('hazard', P, 'Downed tree on power line', 'Wind toppled a tree onto the lines, {place}.'),
+      t('hazard', P, 'Ember shower reported', 'Embers landing on roofs, {place}.'),
+      t('hazard', E, 'Elderly resident needs evacuation help', 'Caller with limited mobility asking for help leaving {place}.'),
+      t('routine', C, 'Ash and air quality complaint', 'Ash falling on cars and yards, {place}.'),
+      t('routine', R, 'Road closure question', 'Caller asking which roads near {place} are open.'),
+    ],
+    banner: '{intensityWord} wildfire burning near {area}, driven by high winds. Call volume at {multiple}× normal. Evacuations under way.',
+    recommendation: 'Issue an evacuation order for {area} and commit {units} engine strike teams with air support; open contraflow on the main exit routes.',
+    actions: [
+      'Push a mandatory evacuation alert to {area}',
+      'Open evacuation centers on the fire\'s upwind side',
+      'Coordinate preemptive power shutoffs with DWP',
+      'Request air tankers and helicopters from LA County',
+      'Set up an animal evacuation point',
+      'Issue a smoke advisory citywide',
+    ],
+  },
+
+  flood: {
+    label: 'Flood / storm',
+    emoji: '🔵',
+    tone: 'blue',
+    keywords: ['flood', 'flooding', 'rain', 'storm', 'atmospheric river', 'mudslide', 'debris flow', 'river', 'tsunami', 'surge', 'hurricane', 'tropical'],
+    curve: 'ramp',
+    durationHours: 12,
+    categoryWeights: { [E]: 0.15, [P]: 0.26, [R]: 0.32, [U]: 0.23, [C]: 0.04 },
+    templates: [
+      t('critical', E, 'Swift-water rescue', 'Person swept into a flood channel near {place}.'),
+      t('critical', E, 'Motorists stranded in underpass', 'Cars submerged to the windows in an underpass, {place}.'),
+      t('critical', P, 'Mudslide threatening homes', 'Hillside sliding toward homes, {place}.'),
+      t('critical', E, 'Vehicle swept off roadway', 'Car carried into a flooded wash, {place}; occupant on the roof.'),
+      t('critical', E, 'Encampment cut off by water', 'People stranded by rising water, {place}.'),
+      t('hazard', P, 'Downed trees blocking road', 'Two trees down across the road, {place}.'),
+      t('hazard', U, 'Power outage cluster', 'Thousands of customers without power, {place}.'),
+      t('hazard', R, 'Sinkhole opening', 'Sinkhole widening in the street, {place}.'),
+      t('hazard', U, 'Storm drain overflow', 'Drains overwhelmed; water entering homes, {place}.'),
+      t('hazard', P, 'Rockfall on roadway', 'Boulders in the lanes near {place}.'),
+      t('hazard', R, 'Flooded roadway', 'Road under two feet of water, {place}.'),
+      t('routine', R, 'Pothole surge', 'Many new pothole reports around {place}.'),
+      t('routine', U, 'Clogged catch basin', 'Leaves blocking the catch basin, {place}.'),
+    ],
+    banner: '{intensityWord} flooding around {area}. Call volume at {multiple}× normal. Swift-water rescues and mudslides reported.',
+    recommendation: 'Pre-position {units} water rescue units near {area} and send sandbag crews to the hillside streets.',
+    actions: [
+      'Close flooded underpasses near {area}',
+      'Issue an evacuation warning for burn-scar hillsides',
+      'Stage DWP crews for the outage clusters',
+      'Push a "turn around, don\'t drown" alert',
+      'Open sandbag stations at fire stations',
+      'Request swift-water teams from LA County',
+    ],
+  },
+
+  heatwave: {
+    label: 'Heat wave',
+    emoji: '🌡️',
+    tone: 'amber',
+    keywords: ['heat', 'heatwave', 'heat wave', 'hot', 'temperature', 'drought'],
+    curve: 'ramp',
+    durationHours: 12,
+    categoryWeights: { [E]: 0.22, [P]: 0.18, [R]: 0.06, [U]: 0.44, [C]: 0.1 },
+    templates: [
+      t('critical', E, 'Heat stroke, person unresponsive', 'Older adult found unresponsive in an apartment with no AC, {place}.'),
+      t('critical', E, 'Unhoused person collapsed', 'Person collapsed at a bus stop in the heat, {place}.'),
+      t('critical', E, 'Child left in hot car', 'Bystander reports a child alone in a parked car, {place}.'),
+      t('hazard', U, 'Transformer failure', 'Transformer blew; block without power, {place}.'),
+      t('hazard', U, 'Rolling blackout', 'Grid emergency blackout in effect, {place}.'),
+      t('hazard', P, 'Senior building without AC', 'Building AC down; residents feeling unwell, {place}.'),
+      t('hazard', P, 'Traffic signals out', 'Signals dark from the outage, {place}.'),
+      t('hazard', U, 'Open hydrant', 'Hydrant opened by residents, losing water pressure, {place}.'),
+      t('routine', U, 'Cooling center question', 'Caller asking for the nearest cooling center to {place}.'),
+      t('routine', R, 'Buckled pavement from heat', 'Asphalt softened and rutted, {place}.'),
+      t('routine', C, 'Overflowing trash smell', 'Trash odor in the heat, {place}.'),
+    ],
+    banner: '{intensityWord} heat wave over {area}. Call volume at {multiple}× normal. Heat illness calls and grid failures rising.',
+    recommendation: 'Open cooling centers in {area}, add {units} ambulances on heat-illness standby and coordinate load shedding with DWP.',
+    actions: [
+      'Extend cooling center hours and add bus service to them',
+      'Run wellness checks for seniors living alone',
+      'Coordinate with DWP on rolling blackout zones',
+      'Send outreach teams to unhoused encampments with water',
+      'Issue an Extreme Heat Warning alert',
+    ],
+  },
+
+  outage: {
+    label: 'Power outage',
+    emoji: '⚡',
+    tone: 'amber',
+    keywords: ['power', 'outage', 'blackout', 'grid', 'electricity', 'substation', 'transformer'],
+    curve: 'spike',
+    durationHours: 8,
+    categoryWeights: { [E]: 0.1, [P]: 0.3, [R]: 0.06, [U]: 0.48, [C]: 0.06 },
+    templates: [
+      t('critical', E, 'Medical device without power', 'Resident on home oxygen with no power, {place}.'),
+      t('critical', E, 'People trapped in elevator', 'Elevator stopped between floors, {place}.'),
+      t('critical', P, 'Substation fire', 'Fire at the substation, {place}; smoke visible.'),
+      t('hazard', P, 'Intersections without signals', 'Several signals dark, near-misses reported, {place}.'),
+      t('hazard', U, 'Downed power line sparking', 'Line down and sparking on the sidewalk, {place}.'),
+      t('hazard', U, 'Sewage lift station offline', 'Pump station without power, {place}.'),
+      t('hazard', P, 'Generator carbon monoxide', 'Family feeling dizzy after running a generator indoors, {place}.'),
+      t('routine', U, 'Outage restoration ETA', 'Caller asking when power returns to {place}.'),
+      t('routine', C, 'Food spoilage question', 'Caller asking about lost refrigerated food, {place}.'),
+    ],
+    banner: '{intensityWord} power outage across {area}. Call volume at {multiple}× normal. Signals dark and vulnerable residents at risk.',
+    recommendation: 'Send {units} traffic officers to the dark intersections in {area} and prioritize DWP restoration for medical-baseline customers.',
+    actions: [
+      'Deploy portable signals and traffic control',
+      'Run welfare checks on medical-baseline customers',
+      'Open charging and cooling sites',
+      'Push a carbon monoxide safety alert',
+      'Request mutual-aid line crews',
+    ],
+  },
+
+  hazmat: {
+    label: 'Hazmat / chemical spill',
+    emoji: '☣️',
+    tone: 'amber',
+    keywords: ['chemical', 'spill', 'hazmat', 'toxic', 'leak', 'gas leak', 'explosion', 'refinery', 'ammonia', 'fumes', 'tanker', 'derail'],
+    curve: 'spike',
+    durationHours: 6,
+    categoryWeights: { [E]: 0.28, [P]: 0.42, [R]: 0.1, [U]: 0.12, [C]: 0.08 },
+    templates: [
+      t('critical', E, 'Workers overcome by fumes', 'Several workers collapsed near the release site, {place}.'),
+      t('critical', E, 'Explosion and fire at facility', 'Explosion reported at an industrial site, {place}.'),
+      t('critical', P, 'Toxic plume drifting over homes', 'Visible plume moving over a residential area, {place}.'),
+      t('critical', E, 'Residents with breathing difficulty', 'Multiple people coughing and short of breath, {place}.'),
+      t('hazard', P, 'Strong chemical odor', 'Callers report a sharp chemical smell, {place}.'),
+      t('hazard', P, 'Shelter-in-place questions', 'School asking whether to keep students indoors, {place}.'),
+      t('hazard', R, 'Road closed for hazmat', 'Hazmat cordon closing streets near {place}.'),
+      t('hazard', U, 'Runoff entering storm drains', 'Discolored liquid flowing into drains, {place}.'),
+      t('routine', C, 'Eye irritation complaint', 'Caller reports itchy eyes outdoors, {place}.'),
+      t('routine', C, 'Dead fish in channel', 'Dead fish spotted in the channel, {place}.'),
+    ],
+    banner: '{intensityWord} hazardous materials release near {area}. Call volume at {multiple}× normal. Shelter-in-place advised downwind.',
+    recommendation: 'Issue a shelter-in-place order downwind of {area}, send {units} hazmat and EMS units and set a decontamination point upwind.',
+    actions: [
+      'Push a shelter-in-place alert to the downwind zone',
+      'Close roads around the cordon near {area}',
+      'Notify hospitals to expect chemical exposures',
+      'Block storm drains to contain runoff',
+      'Request air quality monitoring from AQMD',
+    ],
+  },
+
+  unrest: {
+    label: 'Civil unrest',
+    emoji: '🚨',
+    tone: 'red',
+    keywords: ['riot', 'unrest', 'protest', 'crowd', 'looting', 'stampede', 'shooting', 'attack', 'parade', 'concert', 'stadium', 'game'],
+    curve: 'ramp',
+    durationHours: 8,
+    categoryWeights: { [E]: 0.34, [P]: 0.4, [R]: 0.1, [U]: 0.04, [C]: 0.12 },
+    templates: [
+      t('critical', E, 'Person injured in crowd crush', 'Caller reports people being crushed near the barricades, {place}.'),
+      t('critical', E, 'Vehicle fire in crowd', 'Car set on fire in the middle of the street, {place}.'),
+      t('critical', E, 'Assault in progress', 'Fight with weapons reported, {place}.'),
+      t('critical', P, 'Store being looted', 'Group breaking into storefronts, {place}.'),
+      t('hazard', P, 'Road blocked by crowd', 'Hundreds of people blocking the road, {place}.'),
+      t('hazard', P, 'Fireworks thrown', 'Fireworks thrown toward people, {place}.'),
+      t('hazard', R, 'Bus rerouting needed', 'Transit stuck behind the crowd, {place}.'),
+      t('hazard', E, 'Lost child', 'Parent separated from a child in the crowd, {place}.'),
+      t('routine', C, 'Vandalism and graffiti', 'Fresh graffiti on storefronts, {place}.'),
+      t('routine', C, 'Trash left after crowd', 'Large amounts of trash in the street, {place}.'),
+    ],
+    banner: '{intensityWord} crowd disturbance around {area}. Call volume at {multiple}× normal. Injuries and property damage reported.',
+    recommendation: 'Establish a unified command near {area}, stage {units} EMS units at the crowd edges and open safe dispersal routes.',
+    actions: [
+      'Reroute buses and close streets around {area}',
+      'Stage EMS at the perimeter',
+      'Set up a family reunification point',
+      'Push a "stay away from the area" alert',
+      'Schedule sanitation crews for cleanup',
+    ],
+  },
+
+  generic: {
+    label: 'Major incident',
+    emoji: '🟠',
+    tone: 'orange',
+    keywords: [],
+    curve: 'spike',
+    durationHours: 6,
+    categoryWeights: { [E]: 0.24, [P]: 0.32, [R]: 0.18, [U]: 0.16, [C]: 0.1 },
+    templates: [
+      t('critical', E, 'Multiple people injured', 'Caller reports several injured people, {place}.'),
+      t('critical', E, 'Person trapped', 'Someone trapped and unable to get out, {place}.'),
+      t('critical', P, 'Major road hazard', 'Large hazard blocking all lanes, {place}.'),
+      t('hazard', P, 'Crowd gathering at scene', 'Onlookers crowding responders, {place}.'),
+      t('hazard', R, 'Road closed', 'Street closed by the incident, {place}.'),
+      t('hazard', U, 'Utility damage', 'Utility equipment damaged, {place}.'),
+      t('hazard', P, 'Traffic gridlock', 'Traffic backed up for blocks, {place}.'),
+      t('routine', C, 'Debris cleanup request', 'Debris left in the street, {place}.'),
+      t('routine', R, 'Detour question', 'Caller asking for detours around {place}.'),
+    ],
+    banner: '{intensityWord} incident reported near {area}. Call volume at {multiple}× normal.',
+    recommendation: 'Send {units} response units to {area} and set up incident command at a safe staging point.',
+    actions: [
+      'Close streets around {area} and set detours',
+      'Stage EMS near the incident',
+      'Push a public advisory to residents nearby',
+      'Brief the duty officer and prepare a press update',
+    ],
+  },
+};
+
+// The quiet baseline: what a type collapses to at intensity 1.
+export const NORMAL = {
+  label: 'Normal operations',
+  emoji: '🟢',
+  tone: 'emerald',
+  banner: 'All systems nominal. Call volume within the expected range for this time of day.',
+  recommendation: 'Maintain standard staffing: 6 dispatchers on shift, routine crews on scheduled work orders.',
+  actions: ['Continue scheduled pothole and streetlight work orders', 'No pre-positioning required', 'Next weather check-in in 4 hours'],
+};
+
+export const INTENSITY_WORDS = ['Minimal', 'Minor', 'Minor', 'Moderate', 'Moderate', 'Strong', 'Severe', 'Severe', 'Major', 'Catastrophic'];
+
+export const PRESETS = [
+  { label: 'M6.8 earthquake downtown at 2am', description: 'Magnitude 6.8 earthquake downtown at 2am', intensity: 9 },
+  { label: 'Palisades wildfire', description: 'Wildfire in the Palisades with Santa Ana winds', intensity: 8 },
+  { label: 'Atmospheric river flood', description: 'Atmospheric river flooding Sun Valley at 5pm', intensity: 7 },
+  { label: 'Port chemical spill', description: 'Chemical spill at the Port of LA', intensity: 6 },
+  { label: 'Valley heat wave', description: 'Heat wave and rolling blackouts in the Valley at 1pm', intensity: 5 },
+  { label: 'Normal Tuesday', description: 'Normal Tuesday afternoon at 2pm', intensity: 1 },
+];

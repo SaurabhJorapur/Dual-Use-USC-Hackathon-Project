@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getRiskMap, parsePredictInput, predictDegradation } from '../degradation.js';
 
-// Streetlight degradation model: live predictions and the precomputed hotspot map.
+// Public safety risk model (crime + traffic collisions): live predictions and the precomputed hotspot map.
 const router = Router();
 
 router.post('/', async (req, res, next) => {

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getCall, getStats, listCalls, setStatus } from '../callsRepo.js';
+import { requestOperatorTransfer } from '../operatorOverride.js';
 
 const router = Router();
 
@@ -34,6 +35,14 @@ router.patch('/:id/status', async (req, res, next) => {
     const call = await setStatus(req.params.id, req.body?.status, req.body?.note);
     if (!call) return res.status(404).json({ error: 'Call not found' });
     res.json(call);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/takeover', async (req, res, next) => {
+  try {
+    res.json(await requestOperatorTransfer(req.params.id));
   } catch (err) {
     next(err);
   }

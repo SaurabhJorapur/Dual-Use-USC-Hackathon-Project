@@ -31,13 +31,6 @@ export default function CategoryChart({ calls, now, activeCategory, onSelectCate
         </div>
       </div>
 
-      {/* Stacked share bar */}
-      <div className="mb-2 flex h-2 overflow-hidden rounded-full bg-slate-100">
-        {Object.entries(CATEGORIES).map(([cat, meta]) =>
-          counts[cat] ? <span key={cat} style={{ width: `${(counts[cat] / total) * 100}%`, background: meta.hex }} title={`${cat}: ${counts[cat]}`} /> : null,
-        )}
-      </div>
-
       <ul className="space-y-0.5">
         {Object.entries(CATEGORIES).map(([cat, meta]) => {
           const Icon = meta.icon;

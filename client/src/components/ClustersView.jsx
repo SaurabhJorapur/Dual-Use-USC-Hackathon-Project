@@ -27,7 +27,7 @@ function Legend() {
       <span className="flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: UNCLUSTERED_HEX }} /> Individual reports
       </span>
-      <span className="text-slate-400">· Color = issue type; size, pulse and the count show how big and serious it is.</span>
+      <span className="text-slate-400">· Color = issue type; size and the count show how big and serious it is.</span>
     </div>
   );
 }
@@ -39,7 +39,6 @@ function SurgeBanner({ surges }) {
       {surges.map((s) => (
         <div key={s.cell} className="flex items-start gap-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 shadow-sm">
           <span className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-40" />
             <Radar className="relative h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">

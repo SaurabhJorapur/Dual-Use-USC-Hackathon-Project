@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
-/** The degradation model's precomputed high-risk locations (server/data/aggregated_risk_map.json). */
+/** The risk model's precomputed high-risk locations (server/data/aggregated_risk_map.json). */
 export function useRiskMap() {
   const [riskMap, setRiskMap] = useState({ hotspots: [], meta: null, error: null });
 

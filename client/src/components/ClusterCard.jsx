@@ -11,7 +11,7 @@ const STATUS_STYLE = {
 
 /**
  * One incident. `prominent` cards (top-ranked, rising fast or critical) are bigger, more
- * strongly tinted and pulse, so the most important incident is the first thing the eye sees.
+ * strongly tinted and marked with a dot, so the most important incident is the first thing the eye sees.
  */
 export default function ClusterCard({ cluster, rising, active, prominent, now, onOpen }) {
   const { hex } = issueType(cluster.category);
@@ -26,12 +26,7 @@ export default function ClusterCard({ cluster, rising, active, prominent, now, o
       } ${active ? '' : 'opacity-75'}`}
       style={prominent ? { borderColor: hex, background: `linear-gradient(135deg, ${hex}14, #fff 55%)` } : undefined}
     >
-      {prominent && active && (
-        <span className="absolute right-3 top-3 flex h-3 w-3">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: hex }} />
-          <span className="relative inline-flex h-3 w-3 rounded-full" style={{ background: hex }} />
-        </span>
-      )}
+      {prominent && active && <span className="absolute right-3 top-3 h-3 w-3 rounded-full" style={{ background: hex }} />}
 
       <div className="flex items-center gap-2 pr-6">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: hex }} />

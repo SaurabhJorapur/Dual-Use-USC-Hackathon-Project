@@ -58,10 +58,24 @@ export default function ClusterChart({ calls, clusters, now, onOpen }) {
       {rows.length ? (
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} margin={{ top: 4, right: 4, bottom: 0, left: -20 }} onMouseLeave={() => setHovered(null)}>
+            <BarChart data={rows} margin={{ top: 4, right: 4, bottom: 16, left: 4 }} onMouseLeave={() => setHovered(null)}>
               <CartesianGrid vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} interval={0} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                tickLine={{ stroke: '#cbd5e1' }}
+                axisLine={{ stroke: '#cbd5e1' }}
+                interval={0}
+                label={{ value: 'Category', position: 'insideBottom', offset: -12, fontSize: 11, fill: '#64748b' }}
+              />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                tickLine={{ stroke: '#cbd5e1' }}
+                axisLine={{ stroke: '#cbd5e1' }}
+                width={44}
+                label={{ value: 'Reports', angle: -90, position: 'insideLeft', offset: 10, style: { textAnchor: 'middle' }, fontSize: 11, fill: '#64748b' }}
+              />
               <Tooltip cursor={{ fill: '#f8fafc' }} content={<SegmentTooltip hovered={hovered} now={now} />} />
               {segments.map((s) => (
                 <Bar

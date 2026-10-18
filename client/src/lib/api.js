@@ -13,6 +13,7 @@ async function request(path, options = {}) {
 export const api = {
   listCalls: () => request('/api/calls?limit=500'),
   updateStatus: (id, status) => request(`/api/calls/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  takeOverCall: (id) => request(`/api/calls/${id}/takeover`, { method: 'POST' }),
   createWebCall: () => request('/api/retell/web-call', { method: 'POST' }),
   riskMap: () => request('/api/predict-degradation/hotspots'),
   listClusters: (since) => request(`/api/clusters${since ? `?since=${encodeURIComponent(since)}` : ''}`),

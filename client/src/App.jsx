@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import CityMap from './components/CityMap';
 import CallLogsView from './components/CallLogsView';
@@ -7,6 +6,7 @@ import ClustersView from './components/ClustersView';
 import SimulationPage from './pages/SimulationPage';
 import StatusTicker from './components/StatusTicker';
 import CallDrawer from './components/CallDrawer';
+import TestCallButton from './components/TestCallButton';
 import { EMPTY_FILTERS } from './components/Filters';
 import { useCalls } from './hooks/useCalls';
 import { useNow } from './hooks/useNow';
@@ -27,6 +27,16 @@ export default function App() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [selectedId, setSelectedId] = useState(null);
   const [focus, setFocus] = useState(null);
+  // Calls an operator has taken over from the AI agent. Dashboard-local: kept until reload.
+  const [overrides, setOverrides] = useState(() => new Set());
+  const setOverride = useCallback((id, on) => {
+    setOverrides((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
 
   // The sidebar's category filter drives the map; the logs view adds search/urgency/status on top.
   const mapCalls = useMemo(() => (filters.category ? calls.filter((c) => c.category === filters.category) : calls), [calls, filters.category]);
@@ -53,12 +63,11 @@ export default function App() {
     [view],
   );
 
-  // The Disaster Twin simulator is a full-screen page of its own; the dashboard below is unchanged.
+  // The Disaster Simulator is a full-screen page of its own; the dashboard below is unchanged.
   if (view === 'simulation') return <SimulationPage onExit={() => setView('map')} />;
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
-      <Header />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <Sidebar
           view={view}
@@ -101,7 +110,11 @@ export default function App() {
         </main>
       </div>
       <StatusTicker calls={calls} now={now} freshIds={freshIds} onSelect={selectFromTicker} />
-      <CallDrawer call={selected} onClose={close} onUpdated={upsertLocal} />
+      {/* Floating above the ticker; below the call drawer (z-30) so it never covers dispatcher actions. */}
+      <div className="fixed bottom-14 right-4 z-20">
+        <TestCallButton />
+      </div>
+      <CallDrawer call={selected} onClose={close} onUpdated={upsertLocal} override={selected ? overrides.has(selected.id) : false} onOverride={setOverride} />
     </div>
   );
 }

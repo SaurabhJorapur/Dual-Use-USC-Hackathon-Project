@@ -1,4 +1,4 @@
-# CivicLine: Dual-Use Civic AI Call Center
+# CityLine: Dual-Use Civic AI Call Center
 
 A single phone line, answered by a Retell AI voice agent, that triages **city service reports** (potholes,
 traffic signals, noise) versus **emergencies** (robberies, accidents) and streams every call to a real-time
@@ -69,50 +69,55 @@ A map-centric command center:
   logs) and a 24-hour call surge chart, which flags a surge when the current hour exceeds 2x the hourly average.
 - **Live City Map:** calls pinned by category color (red emergency, yellow hazards, blue roads/water/utilities,
   gray code enforcement), with a heat map toggle. Click a pin for a call card with transcript lines and a link to
-  the full report. The **Predictive** toggle shows flames where the degradation model predicts an 80%+ chance of a
-  streetlight failing again within 90 days (click one for the street, risk and repair history).
+  the full report. The **Predictive** toggle shows the safety risk model's riskiest locations in each LAPD area: where
+  a violent crime or injury collision is most likely within 90 days (click one for the street, risk and history).
 - **Call Logs & Records:** a searchable, filterable table. Click a row for the transcript and formal incident
   report. Calls in the same incident cluster are listed once, as a single **Cluster** entry with the number of
   calls; click it for every call in the cluster.
 - **Bottom ticker:** the latest calls. Click one to open it.
 - **Incident Clusters** (separate page, also at `#/clusters`): see below.
-- **Disaster Twin Simulator 🔮** (full-screen page, also at `#/simulation`): replays pre-built crisis scenarios
-  (normal operations, an M6.8 earthquake at 2 AM, an atmospheric-river flash flood) with an alert banner, an AI
-  resource recommendation, a call-surge curve against the normal baseline, category load and a dark map of simulated
-  incidents. Scenarios are static data in `client/src/data/simulationScenarios.js`, so switching is instant and every
-  demo is identical.
+- **Disaster Simulator** (full-screen page, also at `#/simulation`): describe any scenario in free text and pick an
+  intensity (1-10); it generates a timed call timeline with an alert banner, an AI resource recommendation, a
+  call-surge curve against the normal baseline, category load and a map of simulated incidents. Generated in the
+  browser (`client/src/lib/simulation.js`, data in `client/src/data/simulationData.js`); it opens on a built-in
+  earthquake scenario.
 
 **Map pins** come from the caller's spoken location, geocoded on the server (`server/src/geocode.js`). It tries
 the US Census geocoder (addresses and intersections), then Photon and Nominatim (OpenStreetMap), limited to the
 LA area, cached and rate limited to 1/s. Calls without a usable location are counted in a chip on the map. The
 basemap is Esri Light Gray Canvas (no API key needed).
 
-## Predictive degradation model
+## Predictive safety risk model
 
-A gradient-boosted classifier trained on 2020-2025 MyLA311 **streetlight** requests (the only repaired-asset type in
-the data; there are no pothole records). Question it answers: *will this location get another streetlight
-complaint within 90 days?*
+A gradient-boosted classifier trained on LAPD **crime** (2020-2024) and **traffic collision** records. Question it
+answers: *will this location have a violent crime or an injury collision within 90 days?* Violent crime = homicide,
+rape / sexual assault, robbery, aggravated assault, shots fired, brandishing, kidnapping; injury collision = LAPD MO
+code 3027 fatal, 3024 severe or 3025 visible injury. (An earlier target, "any Part 1 crime or collision", was
+near-certain on busy blocks, so every map pin scored ~100% and the model only ranked by volume.)
 
-- **Location** = a ~100 m cell (lat/lng rounded to 3 decimals). **Features**: days since the last completed repair,
-  complaints in the last 2 years and in the last year, average days to close requests there (falling back to the
-  ZIP, then citywide), and whether the last repair was a single- or multi-light issue.
-- **Training rows** are quarterly snapshots, with features from before the snapshot and the outcome from the 90 days
-  after. The holdout is the last four quarters, so the metrics measure forecasting, not memorization: **AUC 0.70**;
-  the HIGH tier (top 10%) is right 37% of the time against a 14% base rate. It's good for prioritizing inspections,
-  not for certainty. Risk factors come from swapping each input for the citywide median and listing those that
-  raise the score.
+- **Location** = a ~100 m cell (lat/lng rounded to 3 decimals). **Features**: crimes, collisions, violent crimes and
+  injury collisions there in the past year, incidents in the last 90 days, days since the last incident and since
+  the last violent crime / injury collision, the share of crimes involving a weapon, the share of incidents at night,
+  and the average activity per location in the surrounding LAPD area.
+- **Data window**: 2020-01-01 to 2024-03-31. LAPD's crime export halves after Q1 2024 (its reporting system
+  changed), so training stops where both sources are fully reported (a month counts at 75% of the median month).
+- **Training rows** are quarterly snapshots, with features from the year before the snapshot and the outcome from
+  the 90 days after. The holdout is the last four quarters, so the metrics measure forecasting, not memorization:
+  **AUC 0.84**; the HIGH tier (top 10%) is right 62% of the time against a 15% base rate. It's good for
+  prioritizing patrol and street-safety reviews, not for certainty. Risk factors come from swapping each input for
+  the citywide median and listing those that raise the score.
 
 ```bash
 cd server
 npm run setup:ml      # creates server/.venv with pandas, scikit-learn, xgboost (macOS: brew install libomp for XGBoost)
-npm run train:model   # ~30s; reads data/raw_data.csv or every data/MyLA311-*.csv
+npm run train:model   # ~15s; reads data/Crime_Data_*.csv and data/Traffic_Collision_*.csv
 ```
-Put the MyLA311 CSVs (data.lacity.org) in `server/data/`; git ignores them. Training writes `server/models/`
-(model, per-location features, `model_metadata.json` with metrics and thresholds) and
-`server/data/aggregated_risk_map.json` (top 200 HIGH-risk locations for the map). Those outputs can be committed, so
-teammates don't need the 3 GB of raw data, but they do need `npm run setup:ml` for the Python worker. The server
-starts one Python process on the first prediction and reuses it. The model only knows history up to the
-end of the data (currently 2025-03-31).
+Put the LAPD CSVs (data.lacity.org: "Crime Data from 2020 to Present", "Traffic Collision Data from 2010 to Present")
+in `server/data/`; git ignores them. Training writes `server/models/` (model, per-location and per-area features,
+`model_metadata.json` with metrics and thresholds) and `server/data/aggregated_risk_map.json` (the 7 riskiest HIGH-tier
+locations in each LAPD area, for the map). Those outputs can be committed, so teammates don't need the raw data, but they do need
+`npm run setup:ml` for the Python worker. The server starts one Python process on the first prediction and reuses
+it. The model only knows history up to the end of the data (currently 2024-03-31).
 
 ## Incident clustering
 
@@ -245,7 +250,7 @@ Dispatchers can override any call's status from the detail drawer.
 | GET | `/api/maintenance` | Preemptive crew dispatches |
 | POST | `/api/maintenance` | Dispatch a crew `{ location, probability, inputs, latitude?, longitude? }` |
 | GET | `/api/maintenance/geocode?q=` | Geocode an address or zip (LA area) |
-| POST | `/api/predict-degradation` | Streetlight degradation risk `{ zipcode?, latitude?, longitude?, days_since_repair }` |
+| POST | `/api/predict-degradation` | Public safety risk `{ latitude?, longitude?, area? }` (coordinates or an LAPD area name) |
 | GET | `/api/predict-degradation/hotspots` | Precomputed high-risk locations (`aggregated_risk_map.json`) |
 | GET | `/api/clusters` | Incident clusters with member call ids (`since`, default 7 days) |
 | GET | `/api/clusters/:id` | One cluster with its calls |

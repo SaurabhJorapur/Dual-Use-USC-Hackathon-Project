@@ -18,12 +18,12 @@ function ClusterRow({ cluster, calls, freshIds, now, onOpen }) {
       onClick={open}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open())}
       tabIndex={0}
-      className={`cursor-pointer border-l-4 bg-indigo-50/40 align-top transition-colors hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none ${
+      className={`cursor-pointer border-l-4 bg-slate-50/70 align-top transition-colors hover:bg-slate-100 focus:bg-slate-100 focus:outline-none ${
         URGENCY[cluster.max_urgency]?.row
       } ${calls.some((c) => freshIds.has(c.id)) ? 'animate-flash' : ''}`}
     >
       <td className="whitespace-nowrap px-3 py-2.5">
-        <span className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+        <span className="inline-flex items-center gap-1 rounded-md bg-slate-700 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
           <Layers className="h-3 w-3" aria-hidden /> Cluster
         </span>
       </td>

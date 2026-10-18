@@ -8,42 +8,27 @@
   }
 }
 
-/* Map markers (Leaflet divIcons) */
+/* Map markers (Leaflet divIcons built by lib/mapPin.js): static teardrop pins, no animation. */
 .map-pin {
   position: relative;
   display: block;
-  width: 18px;
-  height: 18px;
-  border-radius: 9999px;
-  background: var(--pin);
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.15), 0 1px 4px rgb(15 23 42 / 0.35);
+  width: 24px;
+  height: 32px;
+  filter: drop-shadow(0 1px 1.5px rgb(15 23 42 / 0.35));
 }
-.map-pin--critical::after,
-.map-hotspot::after {
-  content: '';
+.map-pin svg {
+  display: block;
+}
+.map-pin__glyph {
   position: absolute;
-  inset: -8px;
-  border-radius: 9999px;
-  border: 2px solid var(--pin, #f97316);
-  animation: map-pulse 1.6s ease-out infinite;
-}
-.map-hotspot {
-  position: relative;
+  top: 4px;
+  left: 4px;
   display: flex;
-  width: 30px;
-  height: 30px;
+  width: 16px;
+  height: 15px;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
   color: #fff;
-  background: radial-gradient(circle at 50% 35%, #fb923c, #ea580c);
-  border: 2px solid #fff;
-  box-shadow: 0 0 14px 4px rgb(249 115 22 / 0.45);
-}
-@keyframes map-pulse {
-  0% { transform: scale(0.6); opacity: 0.9; }
-  100% { transform: scale(1.6); opacity: 0; }
 }
 .leaflet-container {
   font-family: inherit;
@@ -77,4 +62,28 @@
     border: none;
     box-shadow: none;
   }
+}
+
+/* Disaster Simulator: feed items slide in as the simulation reveals them. */
+.sim-feed-item {
+  animation: sim-slide 0.35s ease-out;
+}
+@keyframes sim-slide {
+  0% { transform: translateY(-8px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+/* Count bubble on a map pin that stands for several nearby items (zoom decluttering). */
+.pin-count {
+  position: absolute;
+  top: -6px;
+  right: -11px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: #0f172a;
+  border: 1px solid #fff;
+  color: #fff;
+  font: 600 10px/15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  text-align: center;
 }
