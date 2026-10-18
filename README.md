@@ -151,6 +151,61 @@ Limits: the 150 m and 1 h thresholds are tunable constants. Unrelated nearby iss
 described differently can be missed (split and merge exist for that). Unique callers help spot a flood of
 coordinated reports.
 
+## Low-network crisis report form
+
+A plain text form at **`/report/`** (e.g. `http://localhost:5173/report/`) for people with a weak or intermittent
+connection. It is a separate, small page (about 65 KB gzipped, no map or charts) from the dashboard. Reports
+end up in the same `calls` table, so they show on the dashboard, map and Clusters page like phone calls.
+
+**On the device** (`client/src/lib/reportQueue.js`, `client/src/lib/idbStore.js`):
+1. Submitting validates the text (5–4000 characters), generates a UUID, and **commits the report to IndexedDB
+   before any network attempt**. If that fails, the page says so and keeps the text in the form.
+2. The page then POSTs it. A report is removed from the device only when the server answers with
+   `received: true` and the same id. A captive-portal page, timeout or 5xx keeps it queued.
+3. Retries use exponential backoff (5 s doubling to 5 min, with jitter, honoring `Retry-After`). They also run
+   when the page opens, on the browser's `online` event and when the tab becomes visible again.
+   `navigator.onLine` only skips attempts while it says offline: it is never taken as proof of delivery.
+4. Flushes are single-flight, and a Web Lock keeps two tabs from flushing together. Every retry reuses the same
+   id, so a request that succeeded but lost its response is not stored twice.
+5. A 400/413/422 rejection is never dropped: the report stays on the device marked "not accepted", and the person
+   can discard it.
+
+**Service worker** (`client/public/report-sw.js`, production builds only, scope `/report/`) is progressive
+enhancement. It caches the page so it opens offline, and in browsers with Background Sync (Chromium) it sends
+queued reports after the tab is closed. **Limits:** a web page cannot send anything while the device has no
+network at all, and it cannot guarantee it runs in the background. Outside Background Sync, reports go out the next time the page is
+open with a connection. This page does not replace SMS or calling 911, and it says so on the page.
+
+**On the server** (`POST /api/reports`, `server/src/webReports.js`, `server/src/routes/reports.js`):
+- Body `{ id (UUID), text, category?, location?, latitude?, longitude?, submitted_at? }`, limited to 16 KB, with
+  the text capped at 4000 characters and control characters stripped. Rate limit: 60 requests per IP per 10 min,
+  kept generous because carrier NAT puts many phones behind one IP. The limit is in memory, so it is per process.
+- Idempotent: the row's `retell_call_id` is `web_report_<id>` (already `UNIQUE`). Inserting uses
+  `ON CONFLICT DO NOTHING`, and a repeat returns `200 { duplicate: true }` with the same incident ID. The response
+  (`201 { received, report_id, incident_id, processing }`) is sent only after the row is stored.
+- `caller_phone` is the sentinel **`low network report`**. Clustering counts each such report as a separate
+  caller, like anonymous web calls, and the dashboard shows it as "Web Report / Low Network Report".
+- Triage is the same as for calls (`triageCall`). The submitter's optional category takes the place of the
+  post-call analysis category, and the keyword safety net can still force **Critical** (weapons, fire, crashes,
+  injuries...) but never lower it. The row is inserted with this triage applied, so urgent reports show at once.
+  The original text is kept verbatim in `transcript`, shown as "Original report". Nothing is invented: no
+  caller name, and the location and coordinates are only what the person typed or shared.
+- After the response, the server geocodes a typed location if the device sent no coordinates, writes the formal
+  report (`channel: "web_report"`, `original_report`), and runs clustering. A retry of a report whose processing
+  never finished resumes it.
+- `created_at` is when the person wrote the report, so a delayed report clusters with the incident it describes.
+  The device clock is trusted only within 7 days back and 5 minutes ahead. The timeline records the delivery delay.
+- Critical and Urgent reports get the usual `Escalated to 911` / `Escalated to Human` dashboard status, which
+  marks them for dispatcher attention. The timeline states that **no automatic 911 transfer** happens for web
+  reports. The submitter only ever sees "Report received".
+
+No migration is needed: web reports fit the existing `calls` columns.
+
+**AI note:** this server has no language model of its own. For phone calls, the LLM step is Retell's post-call
+analysis, and nothing like it runs for typed text. Web reports therefore get the deterministic triage and
+derived report that calls fall back to (the report's `source` is `"derived"`). To add LLM extraction, pass its
+output where `triageWebReport` passes the submitter's category, and the safety floor still applies.
+
 ## How triage works
 
 | Urgency | Meaning | Status |
@@ -182,6 +237,7 @@ Dispatchers can override any call's status from the detail drawer.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/retell/web-call` | Mint a browser test-call access token |
+| POST | `/api/reports` | Low-network web report (public, idempotent by `id`; see above) |
 | GET | `/api/calls` | List calls (`category`, `urgency`, `status`, `search`, `limit`) |
 | GET | `/api/calls/stats` | Aggregate counts |
 | GET | `/api/calls/:id` | One call |
@@ -200,12 +256,14 @@ Dispatchers can override any call's status from the detail drawer.
 
 ## Tests
 ```bash
-cd server && npm test    # triage classifier, formal reports, prediction input validation, cluster matching
-cd client && npm test    # surge buckets, cluster ranking / chart / surge detection, simulation scenario data
+cd server && npm test    # triage classifier, formal reports, prediction input validation, cluster matching, web reports
+cd client && npm test    # surge buckets, cluster ranking / chart / surge detection, simulation scenario data, report outbox
 ```
 
 ## Before production
 - **Add authentication** to the dashboard and the `/api/calls` + `/api/retell/web-call` routes (e.g. Supabase
   Auth). They are open in this build, and the anon key can read all calls under the current RLS policy.
+- `POST /api/reports` is public by design. Behind a proxy, set Express `trust proxy` so rate limiting sees real
+  client IPs, and consider a shared limiter (or CAPTCHA-free abuse checks) if you run several instances.
 - Never route demo transfers to real 911. Configure a test number.
 - Call recordings and transcripts may contain personal data, so set a retention policy.

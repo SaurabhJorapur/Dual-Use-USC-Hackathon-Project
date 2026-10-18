@@ -4,7 +4,7 @@ import { CategoryIcon, StatusBadge, UrgencyBadge } from './Badges';
 import IncidentReport from './IncidentReport';
 import { STATUS } from '../lib/constants';
 import { api } from '../lib/api';
-import { clockTime, formatPhone } from '../lib/format';
+import { clockTime, formatPhone, isWebReport } from '../lib/format';
 
 function Field({ icon: Icon, label, children }) {
   return (
@@ -69,6 +69,7 @@ export default function CallDrawer({ call, onClose, onUpdated }) {
   }, [call?.id, onClose]);
 
   if (!call) return null;
+  const web = isWebReport(call);
 
   const changeStatus = async (status) => {
     if (status === call.status) return;
@@ -111,8 +112,8 @@ export default function CallDrawer({ call, onClose, onUpdated }) {
           <section className="grid gap-4 sm:grid-cols-2">
             <Field icon={MapPin} label="Location">{call.location}</Field>
             <Field icon={User} label="Caller">{call.caller_name}</Field>
-            <Field icon={Phone} label="Phone">{formatPhone(call.caller_phone)}</Field>
-            <Field icon={FileText} label="Retell call ID">
+            <Field icon={Phone} label={web ? 'Source' : 'Phone'}>{formatPhone(call.caller_phone)}</Field>
+            <Field icon={FileText} label={web ? 'Web report ID' : 'Retell call ID'}>
               <span className="font-mono text-xs">{call.retell_call_id}</span>
             </Field>
           </section>
@@ -135,7 +136,7 @@ export default function CallDrawer({ call, onClose, onUpdated }) {
             <div className="mb-3 flex gap-1 border-b border-slate-200" role="tablist">
               {[
                 ['report', 'Formal Incident Report'],
-                ['transcript', 'Raw Transcript'],
+                ['transcript', web ? 'Original Report' : 'Raw Transcript'],
               ].map(([id, label]) => (
                 <button
                   key={id}

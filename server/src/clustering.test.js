@@ -43,6 +43,13 @@ test('clusterStats counts reports, unique callers, time span, max urgency and ce
   assert.equal(s.location_label, 'Main St & 5th St');
 });
 
+test('web reports share one caller_phone sentinel but each counts as a separate caller', () => {
+  const web = { caller_phone: 'low network report' };
+  const s = clusterStats([call(0, 0, web), call(5, 0.0005, web), call(9, 0.001, web), call(12)]);
+  assert.equal(s.report_count, 4);
+  assert.equal(s.unique_callers, 4);
+});
+
 test('nextStatus lifts to escalated on urgent reports and keeps manual states', () => {
   assert.equal(nextStatus('active', 'Standard'), 'active');
   assert.equal(nextStatus('active', 'Critical'), 'escalated');

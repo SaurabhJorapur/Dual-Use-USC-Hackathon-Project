@@ -9,11 +9,14 @@ const { default: callRoutes } = await import('./routes/calls.js');
 const { default: maintenanceRoutes } = await import('./routes/maintenance.js');
 const { default: predictRoutes } = await import('./routes/predict.js');
 const { default: clusterRoutes } = await import('./routes/clusters.js');
+const { default: reportRoutes } = await import('./routes/reports.js');
 const { startRetellSync } = await import('./retellSync.js');
 
 const app = express();
 
 app.use(cors({ origin: config.corsOrigin }));
+// Public crisis report form: a much smaller body limit, mounted before the general parser.
+app.use('/api/reports', express.json({ limit: '16kb' }), reportRoutes);
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));

@@ -12,7 +12,12 @@ export function clockTime(iso) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
 }
 
+// caller_phone of reports from the offline-first web form (server/src/webReports.js).
+export const WEB_REPORT_PHONE = 'low network report';
+export const isWebReport = (call) => call?.caller_phone === WEB_REPORT_PHONE || Boolean(call?.retell_call_id?.startsWith('web_report_'));
+
 export function formatPhone(phone) {
+  if (phone === WEB_REPORT_PHONE) return 'Web Report / Low Network Report';
   const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(phone || '');
   return m ? `(${m[1]}) ${m[2]}-${m[3]}` : phone;
 }

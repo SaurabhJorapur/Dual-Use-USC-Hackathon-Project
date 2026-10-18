@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { BadgeCheck, Check, Copy, Printer, Send } from 'lucide-react';
 import { CategoryIcon, UrgencyBadge } from './Badges';
+import { isWebReport } from '../lib/format';
 
 const formatDateTime = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Unknown');
 const formatTime = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 // Cluster reports (report.type === 'cluster') cover several calls and have no single source call.
 const dateTimeText = (report, e) => (e.last_report ? `${formatDateTime(e.date_time)} – ${formatTime(e.last_report)}` : formatDateTime(e.date_time));
-const sourceText = (report, call) =>
-  report.type === 'cluster' ? `${report.consolidated_calls.length} calls consolidated into one incident` : `call ${call.retell_call_id}`;
+const sourceText = (report, call) => {
+  if (report.type === 'cluster') return `${report.consolidated_calls.length} calls consolidated into one incident`;
+  return isWebReport(call) ? `low-network web report ${call.retell_call_id}` : `call ${call.retell_call_id}`;
+};
 
 /** Plain-text rendering used by the Copy button. */
 export function reportToText(report, call) {
@@ -63,7 +66,11 @@ export default function IncidentReport({ report, call }) {
   const [copied, setCopied] = useState(false);
 
   if (!report) {
-    return <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Report will be generated when the call is analyzed.</p>;
+    return (
+      <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
+        {isWebReport(call) ? 'Web report received; the incident report is being generated.' : 'Report will be generated when the call is analyzed.'}
+      </p>
+    );
   }
 
   const e = report.extracted_entities || {};
@@ -164,8 +171,11 @@ export default function IncidentReport({ report, call }) {
       </div>
 
       <footer className="border-t border-slate-200 bg-slate-50 px-5 py-2 text-[11px] leading-relaxed text-slate-500">
-        {report.source === 'ai' ? 'AI-generated from call audio' : 'Derived from call record'} ·{' '}
-        {report.type === 'cluster' ? `Consolidates ${report.consolidated_calls.length} calls` : `Call ${call.retell_call_id}`} · Generated{' '}
+        {report.source === 'ai' ? 'AI-generated from call audio' : isWebReport(call) ? 'Derived from written web report' : 'Derived from call record'} ·{' '}
+        {report.type === 'cluster'
+          ? `Consolidates ${report.consolidated_calls.length} calls`
+          : `${isWebReport(call) ? 'Web report' : 'Call'} ${call.retell_call_id}`}{' '}
+        · Generated{' '}
         {formatDateTime(report.generated_at)}. Verify before submission.
       </footer>
     </article>

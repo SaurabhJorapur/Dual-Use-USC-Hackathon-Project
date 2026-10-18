@@ -4,6 +4,7 @@
 // their own tables (supabase/migrations/04_incident_clusters.sql); calls are untouched.
 import { supabase } from './supabase.js';
 import { buildClusterReport } from './report.js';
+import { WEB_REPORT_PHONE } from './webReports.js';
 
 export const RADIUS_KM = 0.15;
 export const WINDOW_MS = 60 * 60 * 1000;
@@ -12,7 +13,8 @@ const URGENCY_RANK = ['Standard', 'Urgent', 'Critical'];
 // Category pairs that can share a cluster. Each triage category already spans related
 // issues (e.g. power outage and downed line), so none are needed today.
 const RELATED = {};
-const ANONYMOUS_CALLERS = new Set(['Web Call', 'Unknown', '']);
+// Placeholder caller_phone values that don't identify a person (WEB_REPORT_PHONE: low-network web reports).
+const ANONYMOUS_CALLERS = new Set(['Web Call', 'Unknown', WEB_REPORT_PHONE, '']);
 
 const time = (iso) => new Date(iso).getTime();
 
@@ -54,7 +56,7 @@ export function clusterStats(calls) {
   const located = calls.filter(hasPoint);
   const times = calls.map((c) => time(c.created_at));
   const phones = calls.map((c) => (c.caller_phone || '').trim());
-  // Anonymous web/unknown callers can't be told apart, so each counts as distinct.
+  // Anonymous web calls, web reports and unknown callers can't be told apart, so each counts as distinct.
   const unique = new Set(phones.filter((p) => !ANONYMOUS_CALLERS.has(p))).size + phones.filter((p) => ANONYMOUS_CALLERS.has(p)).length;
   return {
     report_count: calls.length,

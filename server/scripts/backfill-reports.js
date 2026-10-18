@@ -12,6 +12,7 @@ assertConfig();
 const { supabase } = await import('../src/supabase.js');
 const { retell } = await import('../src/retell.js');
 const { buildFormalReport } = await import('../src/report.js');
+const { buildWebFormalReport, isWebReport } = await import('../src/webReports.js');
 const { coordinatesFor } = await import('../src/callsRepo.js');
 
 const all = process.argv.includes('--all');
@@ -32,6 +33,11 @@ if (geocoded) console.log(`Geocoded ${geocoded} call location(s).`);
 const rows = all ? everything : everything.filter((r) => r.formal_report == null);
 let ai = 0;
 for (const row of rows) {
+  if (isWebReport(row)) {
+    const { error: updateError } = await supabase.from('calls').update({ formal_report: buildWebFormalReport(row) }).eq('id', row.id);
+    if (updateError) throw updateError;
+    continue;
+  }
   let call;
   if (retell && !row.retell_call_id.startsWith('demo_')) {
     call = await retell.call.retrieve(row.retell_call_id).catch(() => undefined);

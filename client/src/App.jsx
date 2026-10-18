@@ -18,7 +18,7 @@ const HASH_VIEWS = { '#/clusters': 'clusters', '#/simulation': 'simulation' };
 const VIEW_HASHES = Object.fromEntries(Object.entries(HASH_VIEWS).map(([hash, view]) => [view, hash]));
 
 export default function App() {
-  const { calls, loading, error, connection, freshIds, upsertLocal } = useCalls();
+  const { calls, loading, error, freshIds, upsertLocal } = useCalls();
   const { hotspots } = useRiskMap();
   // Shared by the clusters page and the call logs (which list a cluster as one entry).
   const { clusters, loading: clustersLoading, error: clustersError, reload: reloadClusters } = useClusters();
@@ -58,7 +58,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
-      <Header connection={connection} />
+      <Header />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <Sidebar
           view={view}
